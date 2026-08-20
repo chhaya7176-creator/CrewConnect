@@ -155,13 +155,17 @@ class ProviderRequirement(BaseModel):
     rank: str
     vessel_type: str
     sea_time: str
+    sea_time_priority: Optional[str] = "Mandatory"
     coc: List[str]
+    coc_priority: Optional[str] = "Mandatory"
     us_visa: str
+    us_visa_priority: Optional[str] = "Preferred"
     mobile: str
     consent: bool
     company_name: str
     email: str
     availability: str
+    availability_priority: Optional[str] = "Preferred"
     summary: Optional[str] = ""
 
 
@@ -322,11 +326,13 @@ def matches_requirement(seeker: dict, req: dict) -> bool:
         return False
     if seeker["vessel_type"] != req["vessel_type"] and req["vessel_type"] not in ("Any",):
         return False
-    if sea_time_rank(seeker["sea_time"]) < sea_time_rank(req["sea_time"]):
-        return False
+    if req.get("sea_time_priority", "Mandatory") == "Mandatory":
+        if sea_time_rank(seeker["sea_time"]) < sea_time_rank(req["sea_time"]):
+            return False
     coc_list = req.get("coc", [])
-    if "Any" not in coc_list and seeker["coc"] not in coc_list:
-        return False
+    if req.get("coc_priority", "Mandatory") == "Mandatory":
+        if "Any" not in coc_list and seeker["coc"] not in coc_list:
+            return False
     return True
 
 
@@ -377,9 +383,13 @@ async def get_matches(user=Depends(get_current_user)):
             "rank": p["rank"],
             "vessel_type": p["vessel_type"],
             "sea_time": p["sea_time"],
+            "sea_time_priority": p.get("sea_time_priority", "Mandatory"),
             "coc": p["coc"],
+            "coc_priority": p.get("coc_priority", "Mandatory"),
             "us_visa": p["us_visa"],
+            "us_visa_priority": p.get("us_visa_priority", "Preferred"),
             "availability": p["availability"],
+            "availability_priority": p.get("availability_priority", "Preferred"),
             "summary": p.get("summary", ""),
         } for p in matched]
         result["profile"] = seeker
