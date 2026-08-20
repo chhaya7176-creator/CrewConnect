@@ -581,7 +581,7 @@ CV_SYSTEM_PROMPT = (
     "biodata / CV and return it STRICTLY as JSON matching this exact schema (keys and nesting):\n"
     + json.dumps(STANDARD_CV_TEMPLATE)
     + "\nRules: (1) Fill every field you can find. Use \"\" for anything missing or illegible. "
-    "(2) total_sea_experience_months must be a number as string. (3) Dates as DD/MM/YYYY when possible. "
+    "(2) total_sea_experience_months must be a number as string. (3) Dates strictly as DD MM YYYY (day month year, space-separated, e.g. 15 08 2026). "
     "(4) sea_service and certificates are arrays of objects with the shown keys. "
     "(5) Add an extra top-level key \"uncertain_fields\": a list of dotted paths (e.g. \"personal.full_name\", "
     "\"sea_service[0].vessel_name\") whose values you GUESSED or found hard to read (common with handwriting). "
@@ -673,6 +673,46 @@ def normalize_uncertain(paths, data: dict):
     return out
 
 
+_FULL_DATE_FMTS = ("%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y-%m-%d", "%Y/%m/%d",
+                   "%d %m %Y", "%d %b %Y", "%d %B %Y", "%d-%b-%Y", "%d-%b-%y", "%d %b %y")
+_MY_DATE_FMTS = ("%m/%Y", "%m-%Y", "%b %Y", "%B %Y", "%b-%y", "%B-%Y", "%m %Y")
+
+
+def normalize_date(s):
+    if not s or not isinstance(s, str):
+        return s
+    t = s.strip()
+    if re.fullmatch(r'\d{4}', t):  # year only
+        return t
+    for fmt in _FULL_DATE_FMTS:
+        try:
+            dt = datetime.strptime(t, fmt)
+            return f"{dt.day:02d} {dt.month:02d} {dt.year}"
+        except ValueError:
+            pass
+    for fmt in _MY_DATE_FMTS:
+        try:
+            dt = datetime.strptime(t, fmt)
+            return f"{dt.month:02d} {dt.year}"
+        except ValueError:
+            pass
+    return s  # leave keywords like "Immediate" untouched
+
+
+def apply_dates(data: dict) -> dict:
+    for section, key in [("personal", "date_of_birth"), ("professional", "passport_expiry"),
+                         ("professional", "cdc_expiry"), ("availability", "available_from")]:
+        if isinstance(data.get(section), dict) and key in data[section]:
+            data[section][key] = normalize_date(data[section][key])
+    for row in data.get("sea_service", []) or []:
+        for k in ("from_date", "to_date"):
+            row[k] = normalize_date(row.get(k, ""))
+    for row in data.get("certificates", []) or []:
+        for k in ("issue_date", "expiry_date"):
+            row[k] = normalize_date(row.get(k, ""))
+    return data
+
+
 def get_path(data: dict, path: str):
     cur = data
     for part in path.split("."):
@@ -732,6 +772,7 @@ async def parse_cv(req: ParseRequest, user=Depends(get_current_user)):
         raise HTTPException(status_code=502, detail="AI parsing failed. Please try again.")
     uncertain = parsed.pop("uncertain_fields", []) if isinstance(parsed, dict) else []
     data = merge_template(parsed)
+    apply_dates(data)
     uncertain = normalize_uncertain(uncertain, data)
     result = await _store_cv(user["id"], req.document_id, record["original_filename"], data, uncertain)
     return result
@@ -751,6 +792,7 @@ async def update_cv(cv_id: str, upd: CVUpdate, user=Depends(get_current_user)):
     if cv["user_id"] != user["id"] and not user.get("is_admin"):
         raise HTTPException(status_code=403, detail="Not allowed")
     data = merge_template(upd.data)
+    apply_dates(data)
     update = {
         "data": data,
         "missing_fields": compute_missing(data),
@@ -1005,6 +1047,14 @@ async def seed_data():
             })
             await db.providers.insert_one(doc)
     logger.info("Seed data ensured")
+    # migrate stored CVs to DD MM YYYY date format
+    async for cv in db.parsed_cvs.find({}):
+        data = cv.get("data", {})
+        before = json.dumps(data, sort_keys=True)
+        apply_dates(data)
+        if json.dumps(data, sort_keys=True) != before:
+            await db.parsed_cvs.update_one({"id": cv["id"]}, {"$set": {"data": data}})
+    logger.info("CV date migration ensured")
 
 
 app.include_router(api_router)
