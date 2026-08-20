@@ -24,30 +24,32 @@ export const Documents = ({ onChange }) => {
   };
   useEffect(() => { load(); }, []);
 
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (usage.used + file.size > LIMIT_BYTES) {
-      toast.error(`This file would exceed your 100 MB limit. You have ${fmtMB(usage.remaining)} MB free.`);
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     setUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    try {
-      await api.post(`/documents?category=${encodeURIComponent(category)}`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      toast.success("Document uploaded");
-      load();
-      onChange?.();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Upload failed");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+    let running = usage.used;
+    let ok = 0, skipped = 0;
+    for (const file of files) {
+      if (running + file.size > usage.limit) { skipped++; continue; }
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        await api.post(`/documents?category=${encodeURIComponent(category)}`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        running += file.size;
+        ok++;
+      } catch (err) {
+        skipped++;
+      }
     }
+    if (ok) toast.success(`${ok} document${ok > 1 ? "s" : ""} uploaded`);
+    if (skipped) toast.error(`${skipped} file${skipped > 1 ? "s" : ""} skipped — exceeds your ${limitMB} MB limit`);
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
+    load();
+    onChange?.();
   };
 
   const view = (id) => {
@@ -83,7 +85,8 @@ export const Documents = ({ onChange }) => {
 
   const isCv = (d) => /cv|resume|biodata/i.test(d.category) || /cv|resume|biodata/i.test(d.original_filename);
 
-  const pct = Math.min(100, (usage.used / LIMIT_BYTES) * 100);
+  const limitMB = Math.round((usage.limit || 0) / (1024 * 1024));
+  const pct = usage.limit ? Math.min(100, (usage.used / usage.limit) * 100) : 0;
 
   return (
     <div className="space-y-5" data-testid="documents-panel">
@@ -92,13 +95,14 @@ export const Documents = ({ onChange }) => {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 text-sm font-medium">
             <HardDrive className="w-4 h-4 text-[#0066FF]" /> Document storage
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[#8A8F9E] uppercase">{usage.user_type === "company" ? "Company" : "Crew"}</span>
           </div>
           <div className="text-xs font-data text-[#8A8F9E]">
-            <span className={pct > 90 ? "text-[#FF5A00]" : "text-[#F3F4F6]"}>{fmtMB(usage.used)} MB</span> / 100 MB
+            <span className={pct > 90 ? "text-[#FF5A00]" : "text-[#F3F4F6]"}>{fmtMB(usage.used)} MB</span> / {limitMB} MB
           </div>
         </div>
         <Progress value={pct} className="h-2 bg-white/10 [&>div]:bg-[#FF5A00]" />
-        <div className="text-[11px] text-[#8A8F9E] mt-1.5">{fmtMB(usage.remaining)} MB free · up to 100 MB per account</div>
+        <div className="text-[11px] text-[#8A8F9E] mt-1.5">{fmtMB(usage.remaining)} MB free · up to {limitMB} MB per account</div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-white/10 bg-[#0A0B12]">
@@ -110,16 +114,16 @@ export const Documents = ({ onChange }) => {
             {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
-        <input ref={fileRef} type="file" className="hidden" onChange={handleFile} accept=".pdf,.png,.jpg,.jpeg,.txt,.docx" data-testid="doc-file-input" />
+        <input ref={fileRef} type="file" multiple className="hidden" onChange={handleFiles} accept=".pdf,.png,.jpg,.jpeg,.txt,.docx" data-testid="doc-file-input" />
         <Button
           className="bg-[#FF5A00] hover:bg-[#E04F00] rounded-full gap-2"
           disabled={uploading || usage.remaining <= 0}
           onClick={() => fileRef.current?.click()}
           data-testid="doc-upload-btn"
         >
-          <Upload className="w-4 h-4" /> {uploading ? "Uploading..." : "Upload document"}
+          <Upload className="w-4 h-4" /> {uploading ? "Uploading..." : "Upload documents"}
         </Button>
-        <span className="text-xs text-[#8A8F9E]">PDF, images or Word — stored securely to your account.</span>
+        <span className="text-xs text-[#8A8F9E]">Select one or more files (PDF, images or Word) — stored securely to your account.</span>
       </div>
 
       {docs.length === 0 ? (

@@ -453,7 +453,8 @@ async def submit_feedback(fb: FeedbackIn, user=Depends(get_current_user)):
 
 
 # ---------------- Documents ----------------
-MAX_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB per user
+CREW_LIMIT = 100 * 1024 * 1024   # 100 MB for seafarer/crew users
+COMPANY_LIMIT = 5 * 1024 * 1024  # 5 MB for hiring companies
 
 
 async def user_storage_used(user_id: str) -> int:
@@ -465,10 +466,20 @@ async def user_storage_used(user_id: str) -> int:
     return agg[0]["total"] if agg else 0
 
 
+async def user_storage_limit(user_id: str) -> int:
+    has_provider = await db.providers.count_documents({"user_id": user_id}) > 0
+    has_seeker = await db.seekers.count_documents({"user_id": user_id}) > 0
+    if has_provider and not has_seeker:
+        return COMPANY_LIMIT
+    return CREW_LIMIT
+
+
 @api_router.get("/documents/usage")
 async def documents_usage(user=Depends(get_current_user)):
     used = await user_storage_used(user["id"])
-    return {"used": used, "limit": MAX_TOTAL_BYTES, "remaining": max(0, MAX_TOTAL_BYTES - used)}
+    limit = await user_storage_limit(user["id"])
+    utype = "company" if limit == COMPANY_LIMIT else "crew"
+    return {"used": used, "limit": limit, "remaining": max(0, limit - used), "user_type": utype}
 
 
 @api_router.post("/documents")
@@ -478,11 +489,13 @@ async def upload_document(file: UploadFile = File(...), category: str = Query("O
     data = await file.read()
     size = len(data)
     used = await user_storage_used(user["id"])
-    if used + size > MAX_TOTAL_BYTES:
-        remaining_mb = max(0, MAX_TOTAL_BYTES - used) / (1024 * 1024)
+    limit = await user_storage_limit(user["id"])
+    if used + size > limit:
+        remaining_mb = max(0, limit - used) / (1024 * 1024)
+        limit_mb = round(limit / (1024 * 1024))
         raise HTTPException(
             status_code=400,
-            detail=f"Storage limit of 100 MB reached. You have {remaining_mb:.1f} MB free.",
+            detail=f"Storage limit of {limit_mb} MB reached. You have {remaining_mb:.1f} MB free.",
         )
     path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     content_type = file.content_type or MIME_TYPES.get(ext, "application/octet-stream")
