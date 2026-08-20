@@ -36,7 +36,6 @@ const buildProviderSteps = (cfg) => [
   { key: "sea_time", bot: "Minimum sea time experience required?", type: "quick", options: cfg.sea_time },
   { key: "sea_time_priority", bot: "Is this experience duration Mandatory or Preferred?", type: "quick", options: ["Mandatory", "Preferred"] },
   { key: "coc", bot: "Which COC issuing countries/authorities are acceptable? Select all that apply — crew holding any of the following will be matched.", type: "multiselect", options: cfg.coc_provider },
-  { key: "coc_priority", bot: "Is this COC requirement Mandatory or Preferred?", type: "quick", options: ["Mandatory", "Preferred"] },
   { key: "us_visa", bot: "US Visa requirement for this role?", type: "quick", options: cfg.us_visa_provider },
   { key: "mobile", bot: "Enter your mobile number with country code for OTP verification.", type: "mobile", placeholder: "+91XXXXXXXXXX" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
@@ -274,6 +273,7 @@ export const ChatFlow = () => {
     if (done) {
       return (
         <div className="space-y-3" data-testid="chat-done-panel">
+          {role === "seeker" && (
           <div className="p-4 rounded-xl bg-[#0066FF]/10 border border-[#0066FF]/40">
             <div className="flex items-center gap-2 text-[#4d94ff] font-semibold text-sm mb-1">
               <Share2 className="w-4 h-4" /> Unlock free visibility
@@ -297,6 +297,7 @@ export const ChatFlow = () => {
               </Button>
             </div>
           </div>
+          )}
           <Button
             className="w-full bg-[#FF5A00] hover:bg-[#E04F00] rounded-full gap-2"
             onClick={() => navigate("/dashboard")}
@@ -470,9 +471,9 @@ export const ChatFlow = () => {
   };
 
   return (
-    <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-white/10 bg-[#0A0B12]">
+    <div className="flex flex-col h-full rounded-2xl overflow-hidden border border-white/15 bg-transparent">
       {/* chat header */}
-      <div className="flex items-center gap-3 px-4 py-3 backdrop-blur-xl bg-[#12131A]/80 border-b border-white/10 z-10">
+      <div className="flex items-center gap-3 px-4 py-3 backdrop-blur-md bg-black/25 border-b border-white/10 z-10">
         <div className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center">
           <Anchor className="w-5 h-5 text-black" strokeWidth={2.5} />
         </div>
@@ -485,7 +486,7 @@ export const ChatFlow = () => {
       </div>
 
       {/* messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 grid-texture" data-testid="chat-messages">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3" data-testid="chat-messages">
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"} animate-fade-up`}>
             <div
