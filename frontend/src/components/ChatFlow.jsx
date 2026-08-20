@@ -8,20 +8,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2 } from "lucide-react";
+import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2, Upload } from "lucide-react";
 import { formatDateInput } from "@/lib/formatDate";
 
 const uid = () => Math.random().toString(36).slice(2);
 
 const buildSeekerSteps = (cfg) => [
   { key: "rank", bot: "What is your professional rank?", type: "dropdown", options: cfg.ranks },
+  { key: "mobile", bot: "Enter your mobile number with country code for OTP verification.", type: "mobile", placeholder: "+91XXXXXXXXXX" },
+  { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
+  { key: "cv_upload", bot: "Great! Please upload your CV / biodata now — PDF, Word or a photo (even handwritten). This saves your profile right away, even if you stop midway. You can also skip and upload it later.", type: "upload", optional: true },
   { key: "vessel_type", bot: "Which vessel type do you prefer to work on?", type: "dropdown", options: cfg.vessel_types },
   { key: "sea_time", bot: "How much sea time do you have (in months)?", type: "quick", options: cfg.sea_time },
   { key: "coc", bot: "Which country/authority issued your Certificate / License / COC?", type: "dropdown", options: cfg.coc_seeker },
   { key: "us_visa", bot: "What is your US Visa status?", type: "quick", options: cfg.us_visa_seeker },
   { key: "other_visa", bot: "Any other visa details? e.g. Schengen, UK. (Optional)", type: "text", optional: true, placeholder: "Type details or press Skip" },
-  { key: "mobile", bot: "Enter your mobile number with country code for OTP verification.", type: "mobile", placeholder: "+91XXXXXXXXXX" },
-  { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
   { key: "consent", bot: "Do you agree to share your details with relevant employers?", type: "quick", options: ["Yes", "No"] },
   { key: "name", bot: "Great! What is your full name?", type: "text", placeholder: "Full name" },
   { key: "email", bot: "Your email ID for job notifications?", type: "text", placeholder: "you@example.com" },
@@ -63,6 +64,8 @@ export const ChatFlow = () => {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [done, setDone] = useState(null);
   const scrollRef = useRef(null);
+  const cvInputRef = useRef(null);
+  const [cvUploading, setCvUploading] = useState(false);
 
   useEffect(() => {
     api.get("/config").then((r) => setCfg(r.data));
@@ -118,6 +121,27 @@ export const ChatFlow = () => {
   };
 
   const step = flow[idx];
+
+  const handleCvUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCvUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await api.post(`/documents?category=${encodeURIComponent("CV / Resume")}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      addUser("📎 " + file.name);
+      toast.success("CV saved to your profile");
+      advance(flow, idx);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Upload failed");
+    } finally {
+      setCvUploading(false);
+      if (cvInputRef.current) cvInputRef.current.value = "";
+    }
+  };
 
   const roleBoxes = (
     <div className="grid grid-cols-2 gap-3 animate-fade-up" data-testid="role-select">
@@ -287,6 +311,33 @@ export const ChatFlow = () => {
     if (!role) return null;
 
     if (!step) return null;
+
+    if (step.type === "upload") {
+      return (
+        <div className="space-y-2" data-testid="chat-upload">
+          <input type="file" ref={cvInputRef} className="hidden" accept=".pdf,.png,.jpg,.jpeg,.txt,.docx" onChange={handleCvUpload} data-testid="chat-cv-input" />
+          <div className="flex gap-2">
+            <Button
+              className="flex-1 bg-[#FF5A00] hover:bg-[#E04F00] rounded-full gap-2"
+              disabled={cvUploading}
+              onClick={() => cvInputRef.current?.click()}
+              data-testid="chat-cv-upload-btn"
+            >
+              <Upload className="w-4 h-4" /> {cvUploading ? "Uploading..." : "Upload CV / biodata"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-[#8A8F9E] hover:text-white"
+              disabled={cvUploading}
+              onClick={() => { addUser("Skip for now"); advance(flow, idx); }}
+              data-testid="chat-cv-skip-btn"
+            >
+              Skip for now
+            </Button>
+          </div>
+        </div>
+      );
+    }
 
     if (step.type === "quick") {
       return (

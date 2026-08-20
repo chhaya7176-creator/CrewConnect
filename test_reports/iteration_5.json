@@ -1,0 +1,39 @@
+{
+  "summary": "Verified the reordered SEAFARER chat flow (early lead capture with CV upload right after OTP) end-to-end plus company regression. Backend: new pytest suite test_cv_early_capture.py (5/5 pass) proves POST /api/documents?category=CV / Resume works immediately after OTP login, persists (GET /api/documents), enforces the 5MB per-file cap (400 with clear message), rejects unauthenticated upload/list (403), and that skipping CV still allows POST /api/seeker/profile (referral_code returned, empty documents list, /api/matches OK). Full suite: 57/58 passed (1 pre-existing stale demo-account assertion in test_eligibility.py). Frontend (4 Playwright runs on the public URL): step order confirmed Rank(dropdown) -> Mobile -> OTP(demo 123456 in bot bubble) -> CV UPLOAD (data-testid chat-upload with chat-cv-upload-btn + chat-cv-skip-btn) -> Vessel Type -> sea time -> COC (Others -> free-text follow-up works) -> US Visa (asked exactly once) -> other visa (skip) -> consent -> name -> email (invalid email rejected) -> availability (Custom date auto-formats 01/09/2026) -> AI summary -> submit (done panel + referral link). UPLOAD PATH: toast 'CV saved to your profile', user bubble '\ud83d\udcce <filename>', flow advances to Vessel Type; document verified via API and visible in Dashboard > Documents tagged 'CV / Resume'. SKIP PATH: 'Skip for now' advances to Vessel Type and the rest of the flow completes + submits. DROP-OFF VALUE: for mobile +919821508920 the user exists and the CV document persists after abandoning the flow (verified by re-login + GET /api/documents; no seeker profile created). OVERSIZE FILE: 6MB PDF -> error toast 'Each file must be 5 MB or smaller...', flow stays on the upload step and a subsequent valid file uploads and advances. COMPANY regression: no CV step in provider flow, US Visa asked exactly once (Must Have/Preferred/Not Required), requirement submitted and dashboard shows 1 requirement with locked candidate card + Unlock full CV \u20b949.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/documents", "issue": "Non-issue confirmation: size cap message and 403 on missing auth behave correctly; no defects found."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Chat CV upload step", "issues": ["'Skip for now' is a ghost button in #8A8F9E on near-black; it reads as inactive text next to the bright primary CTA. Slightly higher contrast or an underline would make the optional path clearer (minor)."]},
+      {"screen": "Unknown routes", "issues": ["Navigating to a non-existent path (e.g. /login) renders a completely blank page \u2014 no catch-all 404 route in App.js (minor, pre-existing)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_cv_early_capture.py",
+    "/app/backend/tests/verify_dropoff_cv.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ChatFlow.jsx handleCvUpload only accepts a single file (files?.[0]); dashboard supports multi-upload. Fine for the chat step but worth confirming product intent.",
+    "No client-side size/type pre-check before POST /api/documents \u2014 a 6MB file is fully uploaded before the server rejects it. A local file.size > 5MB guard would give instant feedback and save bandwidth.",
+    "Pre-existing failing test: tests/test_eligibility.py::test_demo_seeker_not_eligible_has_matches \u2014 demo seeker +919555000111 is now eligible from earlier runs; either reset that account in seed or relax the assertion."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_cv_early_capture.py",
+    "/app/backend/tests/verify_dropoff_cv.py"
+  ],
+  "success_rate": {"backend": "98% (57/58, 1 pre-existing stale-state failure)", "frontend": "100%"},
+  "seed_data_creation": "Created via UI/API: dropped-off seeker +919821508920 (CV only, no profile), skip-path seeker +919746835595 (TEST_QA Skip Seafarer), full-path seeker +919464545547 (TEST_QA Full Seafarer, CV TEST_full_cv.pdf), provider +919669803767 (TEST_QA Marine Co), plus a few OTP-only users from oversize-file tests. All named TEST_*.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "OTP always 123456. Verified accounts above; company demo +15559998888, admin +910000000000.",
+  "context_for_next_testing_agent": "Chat flow is on route '/'. Rank option label is 'Captain / Master' (not 'Master'). Radix Select lists are long/scrollable \u2014 always call scroll_into_view_if_needed() on [data-testid=opt-<X>] before clicking; a plain force-click on an off-screen option silently selects a different option. Dashboard tabs use data-testid=tab-<name> (tab-documents etc.); the stat card also has text 'Documents', so use the testid. LoginDialog testids: nav-login-btn, login-mobile-input, login-send-otp-btn, login-otp-input, login-verify-btn. AI summary usually populates in <5s. Matches can legitimately be empty when COC/vessel do not intersect existing requirements.",
+  "rca_of_the_issue": "No defects found in the reordered flow. The only failing pytest is environmental: the demo seeker +919555000111 became eligible during earlier iterations, so the 'starts NOT eligible' assertion in test_eligibility.py is stale."
+}
