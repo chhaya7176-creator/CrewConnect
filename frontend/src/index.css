@@ -1,0 +1,93 @@
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,900,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: "IBM Plex Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: #05050A;
+    color: #F3F4F6;
+}
+
+.font-heading {
+    font-family: "Cabinet Grotesk", sans-serif;
+    letter-spacing: -0.02em;
+}
+.font-data {
+    font-family: "JetBrains Mono", monospace;
+}
+
+::selection {
+    background: #FF5A00;
+    color: #fff;
+}
+
+/* Radar grid texture for chat area */
+.grid-texture {
+    background-image:
+        linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+}
+
+.noise-overlay::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #0A0B12; }
+::-webkit-scrollbar-thumb { background: #23252F; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #FF5A00; }
+
+@keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.35s ease forwards; }
+
+@keyframes dot-bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+}
+.typing-dot { animation: dot-bounce 1.2s infinite ease-in-out; }
+
+@layer base {
+    :root {
+        --background: 240 33% 3%;
+        --foreground: 220 14% 96%;
+        --card: 232 16% 9%;
+        --card-foreground: 220 14% 96%;
+        --popover: 232 16% 9%;
+        --popover-foreground: 220 14% 96%;
+        --primary: 22 100% 50%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 232 16% 14%;
+        --secondary-foreground: 220 14% 96%;
+        --muted: 232 16% 14%;
+        --muted-foreground: 222 9% 58%;
+        --accent: 232 16% 14%;
+        --accent-foreground: 220 14% 96%;
+        --destructive: 0 72% 51%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 232 16% 18%;
+        --input: 232 16% 18%;
+        --ring: 22 100% 50%;
+        --radius: 0.5rem;
+    }
+}
+
+@layer base {
+    * { @apply border-border; }
+}
