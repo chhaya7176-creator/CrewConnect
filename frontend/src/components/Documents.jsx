@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Empty } from "@/pages/Dashboard";
-import { Upload, FileText, Trash2, ExternalLink, HardDrive } from "lucide-react";
+import { Upload, FileText, Trash2, ExternalLink, HardDrive, FileScan } from "lucide-react";
 
 const CATEGORIES = ["CV / Resume", "COC / License", "Passport", "CDC", "Medical", "STCW", "Other"];
 const LIMIT_BYTES = 100 * 1024 * 1024;
@@ -66,6 +66,23 @@ export const Documents = ({ onChange }) => {
     }
   };
 
+  const [parsing, setParsing] = useState(null);
+  const parseCv = async (id) => {
+    setParsing(id);
+    try {
+      const res = await api.post("/cv/parse", { document_id: id });
+      const miss = res.data.missing_fields?.length || 0;
+      const unc = res.data.uncertain_fields?.length || 0;
+      toast.success(`CV parsed! Open the "Standard CV" tab to review.${miss ? ` ${miss} field(s) missing.` : ""}${unc ? ` ${unc} to verify.` : ""}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Parsing failed");
+    } finally {
+      setParsing(null);
+    }
+  };
+
+  const isCv = (d) => /cv|resume|biodata/i.test(d.category) || /cv|resume|biodata/i.test(d.original_filename);
+
   const pct = Math.min(100, (usage.used / LIMIT_BYTES) * 100);
 
   return (
@@ -93,7 +110,7 @@ export const Documents = ({ onChange }) => {
             {CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
-        <input ref={fileRef} type="file" className="hidden" onChange={handleFile} accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" data-testid="doc-file-input" />
+        <input ref={fileRef} type="file" className="hidden" onChange={handleFile} accept=".pdf,.png,.jpg,.jpeg,.txt,.docx" data-testid="doc-file-input" />
         <Button
           className="bg-[#FF5A00] hover:bg-[#E04F00] rounded-full gap-2"
           disabled={uploading || usage.remaining <= 0}
@@ -127,6 +144,17 @@ export const Documents = ({ onChange }) => {
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
+              {isCv(d) && (
+                <Button
+                  size="sm"
+                  className="w-full mt-2 bg-[#0066FF] hover:bg-[#0052cc] gap-1.5 rounded-full"
+                  disabled={parsing === d.id}
+                  onClick={() => parseCv(d.id)}
+                  data-testid={`doc-parse-${d.id}`}
+                >
+                  <FileScan className="w-3.5 h-3.5" /> {parsing === d.id ? "Parsing..." : "Parse to standard"}
+                </Button>
+              )}
             </div>
           ))}
         </div>

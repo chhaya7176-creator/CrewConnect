@@ -3,6 +3,10 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import io
+import re
+import json
+import base64
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
@@ -21,6 +25,7 @@ db = client[os.environ['DB_NAME']]
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'dev_secret')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+ADMIN_MOBILES = [m.strip() for m in os.environ.get('ADMIN_MOBILES', '').split(',') if m.strip()]
 
 # ---------------- Object storage ----------------
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
@@ -186,6 +191,13 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     user = await db.users.find_one({"id": payload["user_id"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    user["is_admin"] = user.get("mobile") in ADMIN_MOBILES
+    return user
+
+
+async def require_admin(user=Depends(get_current_user)):
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
 
@@ -219,6 +231,7 @@ async def verify_otp(req: OTPVerify):
         }
         await db.users.insert_one(dict(user))
     token = create_token(user["id"], user["mobile"])
+    user["is_admin"] = user["mobile"] in ADMIN_MOBILES
     return {"token": token, "user": user}
 
 
@@ -515,6 +528,380 @@ async def delete_document(doc_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Document not found")
     await db.documents.update_one({"id": doc_id}, {"$set": {"is_deleted": True}})
     return {"success": True}
+
+
+# ---------------- CV Parsing → Standard Maritime CV ----------------
+STANDARD_CV_TEMPLATE = {
+    "personal": {"full_name": "", "date_of_birth": "", "nationality": "", "gender": "", "marital_status": "", "place_of_birth": ""},
+    "contact": {"mobile": "", "email": "", "address": "", "nearest_airport": ""},
+    "professional": {
+        "present_rank": "", "applied_rank": "", "total_sea_experience_months": "",
+        "coc_grade": "", "coc_issuing_authority": "", "coc_number": "",
+        "indos_number": "", "passport_number": "", "passport_expiry": "",
+        "cdc_number": "", "cdc_expiry": "",
+    },
+    "visas": {"us_visa_status": "", "schengen_visa": "", "other_visas": ""},
+    "availability": {"available_from": "", "expected_wages": ""},
+    "sea_service": [],  # {company, vessel_name, vessel_type, rank, grt_bhp, from_date, to_date, months}
+    "certificates": [],  # {name, number, issue_date, expiry_date}
+    "next_of_kin": {"name": "", "relation": "", "contact": ""},
+}
+
+REQUIRED_PATHS = [
+    "personal.full_name", "personal.nationality", "contact.mobile", "contact.email",
+    "professional.present_rank", "professional.total_sea_experience_months",
+    "professional.coc_grade", "availability.available_from",
+]
+
+
+def extract_text_from_bytes(data: bytes, filename: str) -> Optional[str]:
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    try:
+        if ext == "pdf":
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(data))
+            return "\n".join((p.extract_text() or "") for p in reader.pages).strip()
+        if ext == "docx":
+            from docx import Document as DocxDocument
+            d = DocxDocument(io.BytesIO(data))
+            parts = [p.text for p in d.paragraphs]
+            for t in d.tables:
+                for row in t.rows:
+                    parts.append(" | ".join(c.text for c in row.cells))
+            return "\n".join(parts).strip()
+        if ext in ("txt", "csv"):
+            return data.decode("utf-8", errors="ignore").strip()
+    except Exception as e:
+        logger.warning(f"text extraction failed: {e}")
+    return None
+
+
+CV_SYSTEM_PROMPT = (
+    "You are a maritime crewing data-extraction engine. Extract information from a seafarer's "
+    "biodata / CV and return it STRICTLY as JSON matching this exact schema (keys and nesting):\n"
+    + json.dumps(STANDARD_CV_TEMPLATE)
+    + "\nRules: (1) Fill every field you can find. Use \"\" for anything missing or illegible. "
+    "(2) total_sea_experience_months must be a number as string. (3) Dates as DD/MM/YYYY when possible. "
+    "(4) sea_service and certificates are arrays of objects with the shown keys. "
+    "(5) Add an extra top-level key \"uncertain_fields\": a list of dotted paths (e.g. \"personal.full_name\", "
+    "\"sea_service[0].vessel_name\") whose values you GUESSED or found hard to read (common with handwriting). "
+    "(6) Respond with ONLY the JSON object, no prose, no code fences."
+)
+
+
+def _clean_json(text: str) -> dict:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```", 2)[1] if "```" in text[3:] else text
+        text = text.replace("json", "", 1).strip("` \n")
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end != -1:
+        text = text[start:end + 1]
+    return json.loads(text)
+
+
+async def parse_cv_with_ai(text: Optional[str], image_b64: Optional[str]) -> dict:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+    chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=str(uuid.uuid4()),
+                   system_message=CV_SYSTEM_PROMPT).with_model("openai", "gpt-5.4")
+    if image_b64:
+        msg = UserMessage(text="Extract this seafarer CV into the JSON schema. It may be scanned or handwritten.",
+                          file_contents=[ImageContent(image_base64=image_b64)])
+    else:
+        msg = UserMessage(text="Extract this CV text into the JSON schema:\n\n" + (text or ""))
+    resp = await chat.send_message(msg)
+    return _clean_json(resp if isinstance(resp, str) else str(resp))
+
+
+SEA_KEYS = ["company", "vessel_name", "vessel_type", "rank", "grt_bhp", "from_date", "to_date", "months"]
+CERT_KEYS = ["name", "number", "issue_date", "expiry_date"]
+SEA_ALIASES = {"from_date": ["from", "sign_on", "signon", "join_date"], "to_date": ["to", "sign_off", "signoff", "release_date"], "months": ["duration"]}
+
+
+def _coerce_rows(rows, keys, aliases):
+    out = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        r = {}
+        for k in keys:
+            v = row.get(k)
+            if (v is None or v == "") and k in aliases:
+                for a in aliases[k]:
+                    if row.get(a):
+                        v = row.get(a)
+                        break
+            r[k] = str(v or "")
+        out.append(r)
+    return out
+
+
+def merge_template(parsed: dict) -> dict:
+    out = json.loads(json.dumps(STANDARD_CV_TEMPLATE))
+    for section, val in out.items():
+        if isinstance(val, dict):
+            for k in val:
+                out[section][k] = str(parsed.get(section, {}).get(k, "") or "")
+    out["sea_service"] = _coerce_rows(parsed.get("sea_service"), SEA_KEYS, SEA_ALIASES)
+    out["certificates"] = _coerce_rows(parsed.get("certificates"), CERT_KEYS, {})
+    return out
+
+
+def _path_exists(data: dict, path: str) -> bool:
+    cur = data
+    for name, idx in re.findall(r'([a-zA-Z_]+)(\[\d+\])?', path):
+        if not isinstance(cur, dict) or name not in cur:
+            return False
+        cur = cur[name]
+        if idx:
+            i = int(idx[1:-1])
+            if not isinstance(cur, list) or i >= len(cur):
+                return False
+            cur = cur[i]
+    return True
+
+
+def normalize_uncertain(paths, data: dict):
+    out = []
+    for p in paths or []:
+        if not isinstance(p, str):
+            continue
+        p = re.sub(r'\.from(?![_a-zA-Z])', '.from_date', p)
+        p = re.sub(r'\.to(?![_a-zA-Z])', '.to_date', p)
+        if _path_exists(data, p) and p not in out:
+            out.append(p)
+    return out
+
+
+def get_path(data: dict, path: str):
+    cur = data
+    for part in path.split("."):
+        cur = cur.get(part, "") if isinstance(cur, dict) else ""
+    return cur
+
+
+def compute_missing(data: dict) -> List[str]:
+    return [p for p in REQUIRED_PATHS if not str(get_path(data, p)).strip()]
+
+
+class ParseRequest(BaseModel):
+    document_id: str
+
+
+class CVUpdate(BaseModel):
+    data: dict
+    uncertain_fields: Optional[List[str]] = None
+
+
+async def _store_cv(user_id: str, document_id: str, filename: str, data: dict, uncertain: List[str]) -> dict:
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "document_id": document_id,
+        "source_filename": filename,
+        "data": data,
+        "uncertain_fields": uncertain,
+        "missing_fields": compute_missing(data),
+        "status": "parsed",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.parsed_cvs.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.post("/cv/parse")
+async def parse_cv(req: ParseRequest, user=Depends(get_current_user)):
+    record = await db.documents.find_one({"id": req.document_id, "is_deleted": False}, {"_id": 0})
+    if not record or record["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Document not found")
+    raw, _ = get_object(record["storage_path"])
+    ext = record["original_filename"].rsplit(".", 1)[-1].lower()
+    image_b64, text = None, None
+    if ext in ("png", "jpg", "jpeg", "webp", "gif"):
+        image_b64 = base64.b64encode(raw).decode()
+    else:
+        text = extract_text_from_bytes(raw, record["original_filename"])
+        if not text:
+            raise HTTPException(status_code=400, detail="Could not read text from this file. For scanned or handwritten CVs, upload an image (PNG/JPG).")
+    try:
+        parsed = await parse_cv_with_ai(text, image_b64)
+    except Exception as e:
+        logger.error(f"CV parse failed: {e}")
+        raise HTTPException(status_code=502, detail="AI parsing failed. Please try again.")
+    uncertain = parsed.pop("uncertain_fields", []) if isinstance(parsed, dict) else []
+    data = merge_template(parsed)
+    uncertain = normalize_uncertain(uncertain, data)
+    result = await _store_cv(user["id"], req.document_id, record["original_filename"], data, uncertain)
+    return result
+
+
+@api_router.get("/cv")
+async def get_my_cvs(user=Depends(get_current_user)):
+    items = await db.parsed_cvs.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return items
+
+
+@api_router.put("/cv/{cv_id}")
+async def update_cv(cv_id: str, upd: CVUpdate, user=Depends(get_current_user)):
+    cv = await db.parsed_cvs.find_one({"id": cv_id}, {"_id": 0})
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    if cv["user_id"] != user["id"] and not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Not allowed")
+    data = merge_template(upd.data)
+    update = {
+        "data": data,
+        "missing_fields": compute_missing(data),
+        "status": "edited",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "edited_by": "admin" if user.get("is_admin") and cv["user_id"] != user["id"] else "user",
+    }
+    if upd.uncertain_fields is not None:
+        update["uncertain_fields"] = upd.uncertain_fields
+    await db.parsed_cvs.update_one({"id": cv_id}, {"$set": update})
+    cv.update(update)
+    return cv
+
+
+@api_router.get("/cv/{cv_id}/pdf")
+async def cv_pdf(cv_id: str, authorization: Optional[str] = Header(None), auth: Optional[str] = Query(None)):
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    elif auth:
+        token = auth
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    cv = await db.parsed_cvs.find_one({"id": cv_id}, {"_id": 0})
+    if not cv:
+        raise HTTPException(status_code=404, detail="CV not found")
+    is_admin = payload.get("mobile") in ADMIN_MOBILES
+    if cv["user_id"] != payload["user_id"] and not is_admin:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    pdf_bytes = build_cv_pdf(cv["data"])
+    fname = (cv["data"].get("personal", {}).get("full_name") or "seafarer").replace(" ", "_")
+    return Response(content=pdf_bytes, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{fname}_CV.pdf"'})
+
+
+def build_cv_pdf(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm,
+                            leftMargin=16 * mm, rightMargin=16 * mm)
+    styles = getSampleStyleSheet()
+    orange = colors.HexColor("#FF5A00")
+    h = ParagraphStyle("h", parent=styles["Heading2"], textColor=orange, fontSize=12, spaceBefore=10, spaceAfter=4)
+    title = ParagraphStyle("t", parent=styles["Title"], fontSize=20, textColor=colors.HexColor("#0A0B12"))
+    small = ParagraphStyle("s", parent=styles["Normal"], fontSize=9)
+    elems = []
+
+    p = data.get("personal", {})
+    elems.append(Paragraph(p.get("full_name") or "Seafarer CV", title))
+    elems.append(Paragraph("STANDARD MARITIME CV — Maritime Connect", small))
+    elems.append(Spacer(1, 8))
+
+    def kv_table(pairs):
+        rows = [[Paragraph(f"<b>{k}</b>", small), Paragraph(str(v or "—"), small)] for k, v in pairs]
+        t = Table(rows, colWidths=[55 * mm, 110 * mm])
+        t.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#DDDDDD")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        return t
+
+    elems.append(Paragraph("Personal Details", h))
+    elems.append(kv_table([("Full Name", p.get("full_name")), ("Date of Birth", p.get("date_of_birth")),
+                           ("Nationality", p.get("nationality")), ("Gender", p.get("gender")),
+                           ("Marital Status", p.get("marital_status")), ("Place of Birth", p.get("place_of_birth"))]))
+    c = data.get("contact", {})
+    elems.append(Paragraph("Contact", h))
+    elems.append(kv_table([("Mobile", c.get("mobile")), ("Email", c.get("email")),
+                           ("Address", c.get("address")), ("Nearest Airport", c.get("nearest_airport"))]))
+    pr = data.get("professional", {})
+    elems.append(Paragraph("Professional & Certification", h))
+    elems.append(kv_table([("Present Rank", pr.get("present_rank")), ("Applied Rank", pr.get("applied_rank")),
+                           ("Total Sea Experience (months)", pr.get("total_sea_experience_months")),
+                           ("COC Grade", pr.get("coc_grade")), ("COC Authority", pr.get("coc_issuing_authority")),
+                           ("COC Number", pr.get("coc_number")), ("INDOS", pr.get("indos_number")),
+                           ("Passport", pr.get("passport_number")), ("Passport Expiry", pr.get("passport_expiry")),
+                           ("CDC Number", pr.get("cdc_number")), ("CDC Expiry", pr.get("cdc_expiry"))]))
+    v = data.get("visas", {})
+    av = data.get("availability", {})
+    elems.append(Paragraph("Visas & Availability", h))
+    elems.append(kv_table([("US Visa", v.get("us_visa_status")), ("Schengen", v.get("schengen_visa")),
+                           ("Other Visas", v.get("other_visas")), ("Available From", av.get("available_from")),
+                           ("Expected Wages", av.get("expected_wages"))]))
+
+    nok = data.get("next_of_kin", {})
+    if any((nok or {}).values()):
+        elems.append(Paragraph("Next of Kin", h))
+        elems.append(kv_table([("Name", nok.get("name")), ("Relation", nok.get("relation")), ("Contact", nok.get("contact"))]))
+
+    ss = data.get("sea_service", []) or []
+    if ss:
+        elems.append(Paragraph("Sea Service History", h))
+        head = ["Company", "Vessel", "Type", "Rank", "GRT/BHP", "From", "To"]
+        rows = [[Paragraph(f"<b>{x}</b>", small) for x in head]]
+        for s in ss:
+            rows.append([Paragraph(str(s.get(k, "") or "—"), small) for k in
+                        ["company", "vessel_name", "vessel_type", "rank", "grt_bhp", "from_date", "to_date"]])
+        t = Table(rows, colWidths=[28 * mm, 26 * mm, 22 * mm, 24 * mm, 20 * mm, 22 * mm, 22 * mm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), orange), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elems.append(t)
+
+    certs = data.get("certificates", []) or []
+    if certs:
+        elems.append(Paragraph("Certificates & Licenses", h))
+        head = ["Certificate", "Number", "Issue", "Expiry"]
+        rows = [[Paragraph(f"<b>{x}</b>", small) for x in head]]
+        for cc in certs:
+            rows.append([Paragraph(str(cc.get(k, "") or "—"), small) for k in ["name", "number", "issue_date", "expiry_date"]])
+        t = Table(rows, colWidths=[70 * mm, 40 * mm, 27 * mm, 27 * mm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), orange), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elems.append(t)
+
+    doc.build(elems)
+    return buf.getvalue()
+
+
+# ---------------- Admin ----------------
+@api_router.get("/admin/cvs")
+async def admin_list_cvs(admin=Depends(require_admin)):
+    items = await db.parsed_cvs.find({}, {"_id": 0}).sort("updated_at", -1).to_list(500)
+    return items
+
+
+@api_router.get("/admin/stats")
+async def admin_stats(admin=Depends(require_admin)):
+    return {
+        "users": await db.users.count_documents({}),
+        "seekers": await db.seekers.count_documents({}),
+        "providers": await db.providers.count_documents({}),
+        "documents": await db.documents.count_documents({"is_deleted": False}),
+        "parsed_cvs": await db.parsed_cvs.count_documents({}),
+        "feedback": await db.feedback.count_documents({}),
+    }
 
 
 # ---------------- Movement / Availability ----------------

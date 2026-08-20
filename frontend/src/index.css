@@ -63,6 +63,25 @@ body {
 }
 .typing-dot { animation: dot-bounce 1.2s infinite ease-in-out; }
 
+@keyframes field-blink {
+    0%, 100% { border-color: rgba(223, 255, 0, 0.9); box-shadow: 0 0 0 1px rgba(223, 255, 0, 0.4); }
+    50% { border-color: rgba(223, 255, 0, 0.25); box-shadow: 0 0 0 1px rgba(223, 255, 0, 0); }
+}
+.field-blink { animation: field-blink 1.3s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .field-blink { animation: none; border-color: rgba(223,255,0,0.8); } }
+
+@keyframes role-blink {
+    0%, 100% { border-color: rgba(255, 90, 0, 0.9); box-shadow: 0 0 0 0 rgba(255, 90, 0, 0.5); }
+    50% { border-color: rgba(255, 90, 0, 0.25); box-shadow: 0 0 18px 2px rgba(255, 90, 0, 0.25); }
+}
+@keyframes role-blink-blue {
+    0%, 100% { border-color: rgba(0, 102, 255, 0.9); box-shadow: 0 0 0 0 rgba(0, 102, 255, 0.5); }
+    50% { border-color: rgba(0, 102, 255, 0.25); box-shadow: 0 0 18px 2px rgba(0, 102, 255, 0.25); }
+}
+.role-blink { animation: role-blink 1.4s ease-in-out infinite; }
+.role-blink-blue { animation: role-blink-blue 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .role-blink, .role-blink-blue { animation: none; } }
+
 @layer base {
     :root {
         --background: 240 33% 3%;

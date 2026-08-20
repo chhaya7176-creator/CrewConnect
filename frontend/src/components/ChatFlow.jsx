@@ -263,7 +263,7 @@ export const ChatFlow = () => {
         <div className="grid grid-cols-2 gap-3" data-testid="role-select">
           <button
             onClick={() => startRole("seeker")}
-            className="group p-4 rounded-xl border border-white/10 bg-black/20 hover:border-[#FF5A00] hover:-translate-y-1 transition-transform text-left"
+            className="role-blink group p-4 rounded-xl border-2 border-[#FF5A00] bg-black/20 hover:bg-[#FF5A00]/10 hover:-translate-y-1 transition-transform text-left"
             data-testid="role-seeker-btn"
           >
             <Ship className="w-6 h-6 text-[#FF5A00] mb-2" />
@@ -272,7 +272,7 @@ export const ChatFlow = () => {
           </button>
           <button
             onClick={() => startRole("provider")}
-            className="group p-4 rounded-xl border border-white/10 bg-black/20 hover:border-[#0066FF] hover:-translate-y-1 transition-transform text-left"
+            className="role-blink-blue group p-4 rounded-xl border-2 border-[#0066FF] bg-black/20 hover:bg-[#0066FF]/10 hover:-translate-y-1 transition-transform text-left"
             data-testid="role-provider-btn"
           >
             <Building2 className="w-6 h-6 text-[#0066FF] mb-2" />

@@ -1,0 +1,46 @@
+{
+  "summary": "Tested the new AI CV/biodata parsing feature end-to-end (backend + browser E2E) plus regression on existing dashboard flows. Backend: created /app/backend/tests/test_cv.py with 15 focused pytest cases (parse .txt CV, schema/field assertions, GET /cv ordering, PUT recompute of missing_fields + persistence, PDF download magic-bytes check, 401/403/404 authorization, 400 on unreadable file, admin list/stats/cross-user edit/download, non-admin 403). Full suite: 30/30 passed (test_cv.py 15 + existing backend_test.py 15). Frontend E2E: user login (+919812345670/123456) -> Documents tab (storage bar 0.0/100 MB) -> category 'CV / Resume' -> upload TEST_cv.pdf -> 'Parse to standard' -> toast 'CV parsed!' -> Standard CV tab renders CVEditor with correct parsed values (TEST Ramesh Nair / Second Officer / 15-08-2026 / 2 sea-service rows / 2 certificates) -> cleared nationality + Save -> missing-count badge '1 required field(s) missing' and the input turned RED -> restored + saved -> add/delete sea_service row works -> Download PDF opened /api/cv/{id}/pdf?auth=... returning 200 application/pdf 4291 bytes (%PDF-). Admin E2E: +910000000000 login shows nav-admin-btn, /admin shows 6 stat cards + 5 CV cards, opening a CV shows 'You are editing as ADMIN', edit + Save gives 'CV updated (admin)', admin-back-btn works. Route guard verified: anonymous and non-admin users visiting /admin are redirected to / and see no admin data. Regression: all dashboard tabs (matches/documents/cv/movement/history/support) render, feedback form present, no console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/cv/parse", "issue": "uncertain_fields returned by the LLM use non-schema array keys, e.g. 'sea_service[0].from' / 'sea_service[0].to' instead of 'from_date' / 'to_date'. These paths never match any rendered input so the blinking-yellow highlight is silently lost (badge says '7 field(s) to verify' while only 1 input actually blinks). Normalize/validate LLM-returned paths against the schema server-side (or list exact keys in the prompt and drop unknown paths)."},
+      {"endpoint": "GET /api/cv/{id}/pdf", "issue": "build_cv_pdf() omits the next_of_kin section although it is part of the standard schema and is parsed correctly (verified: {'name':'Latha Nair','relation':'Mother',...}). NOK data never appears in the downloadable standard CV."},
+      {"endpoint": "POST /api/cv/parse", "issue": "extract_text_from_bytes only handles pdf/docx/txt/csv; legacy .doc is allowed by the UI file picker but always fails with the generic 400 'Could not read text from this file'."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CVEditor", "issue": "No 'Next of Kin' section rendered — parsed next_of_kin (name/relation/contact) is invisible and non-editable in both user and admin modes even though it exists in the CV data.", "selector": "[data-testid=\"cv-editor\"]", "priority": "MEDIUM"},
+      {"component": "CVEditor / ArrayTable", "issue": "Uncertain-field blink does not apply to sea_service/certificate date inputs because backend paths use 'from'/'to' while the columns are 'from_date'/'to_date' (counter badge and highlighted inputs disagree). Also the array-table inputs have no data-testid, so uncertain highlighting can't be asserted per field.", "selector": "[data-testid=\"sea_service-row-0\"] input", "priority": "MEDIUM"},
+      {"component": "CVEditor save", "issue": "Save (PUT /cv/{id}) never sends uncertain_fields, so once the user verifies/corrects an auto-read field it keeps blinking yellow forever (no way to clear the 'to verify' state).", "selector": "[data-testid=\"cv-save-btn\"]", "priority": "MEDIUM"},
+      {"component": "Documents upload input", "issue": "accept=\".pdf,.png,.jpg,.jpeg,.doc,.docx\" excludes .txt even though .txt CVs are a documented/supported parse input, and includes .doc which the backend cannot parse.", "selector": "[data-testid=\"doc-file-input\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Documents tab", "issues": ["Storage bar shows '0.0 MB / 100 MB' while 2 documents exist (rounding of small files) — consider KB precision"]},
+      {"screen": "Standard CV tab", "issues": ["Parsed-CV list shows duplicate identical entries for repeated parses of the same document with no timestamp/date, making them indistinguishable (e.g. two 'cv.txt' rows)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_cv.py", "/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Normalize LLM uncertain_fields paths to the actual schema keys (from_date/to_date etc.) and drop paths that don't resolve, so blinking highlight matches the 'N field(s) to verify' badge",
+    "Render an editable 'Next of Kin' section in CVEditor and include it in build_cv_pdf()",
+    "Send uncertain_fields (minus verified ones) on CVEditor save so blinking can be cleared",
+    "Add .txt to the file input accept list (and remove .doc or add legacy .doc extraction / clearer error)",
+    "Add data-testid to sea_service/certificates row inputs for testability"
+  ],
+  "critical_code_review_comments": [
+    "compute_missing/get_path only support dotted dict paths; array paths from the LLM are unvalidated — add a resolver that validates every uncertain path or they are silently dead.",
+    "merge_template() copies sea_service/certificates arrays verbatim from LLM output with no per-row key whitelist — malformed rows would render blank columns; consider coercing rows to the expected keys.",
+    "/api/cv/{id}/pdf accepts the JWT via ?auth= query param (also used by documents download) — token leaks into browser history/proxy logs; consider short-lived signed URLs.",
+    "server.py is ~970 lines; CV parsing + PDF builder + admin should be split into routers/modules."
+  ],
+  "updated_files": ["/app/backend/tests/test_cv.py"],
+  "success_rate": {"backend": "100% (30/30 pytest)", "frontend": "100% of core CV flows (user upload->parse->edit->save->PDF, admin edit) passed; 4 minor UI gaps found"},
+  "seed_data_creation": "Test users +919812345670 (user) and +910000000000 (admin) plus TEST_cv.pdf / TEST_cv.txt documents and 5 parsed CV records left in DB (prefixed TEST where possible).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "User: any mobile e.g. +919812345670 + OTP 123456; Admin: +910000000000 + OTP 123456",
+  "context_for_next_testing_agent": "CV feature backend coverage lives in /app/backend/tests/test_cv.py (uses POST /api/documents for upload — NOT /documents/upload). Real Emergent LLM parse of a small .txt/.pdf CV completes in ~10-25s. Frontend testids verified working: doc-file-input (use set_input_files with a local /tmp pdf), doc-category-select + div[role=option], doc-parse-<id>, tab-cv, cv-select-<id>, cv-editor, cv-field-<section>.<key>, cv-save-btn, cv-download-btn (opens popup; assert via context request listener since chromium PDF viewer never fires domcontentloaded), missing-count, add-sea_service, del-sea_service-<i>, nav-admin-btn, admin-stat-<Label>, admin-cv-<id>, admin-back-btn. Known open gaps: uncertain path key mismatch (from/to vs from_date/to_date), next_of_kin not rendered/not in PDF, uncertain_fields never cleared on save.",
+  "rca_of_the_issue": "Blinking-yellow highlight gap: parse_cv_with_ai asks the model for dotted paths of uncertain fields; the model returns 'sea_service[0].from'/'.to' while STANDARD_CV_TEMPLATE sea_service rows use from_date/to_date. CVEditor's ArrayTable builds paths as `${section}[${i}].${key}` with key=from_date, so uncertain.includes(path) is false and the field never blinks, while the header badge counts all uncertain entries — producing an inconsistent UI (7 to verify vs 1 blinking field). Fix by normalizing/validating paths server-side after parsing."
+}

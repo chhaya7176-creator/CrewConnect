@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Anchor, LayoutDashboard, LogOut, LogIn } from "lucide-react";
+import { Anchor, LayoutDashboard, LogOut, LogIn, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 
@@ -26,6 +26,16 @@ export const Navbar = ({ onLogin }) => {
         <div className="flex items-center gap-2">
           {user ? (
             <>
+              {user.is_admin && (
+                <Button
+                  variant="ghost"
+                  className="text-[#DFFF00] hover:bg-white/5 hover:text-[#DFFF00] gap-2"
+                  onClick={() => navigate("/admin")}
+                  data-testid="nav-admin-btn"
+                >
+                  <ShieldCheck className="w-4 h-4" /> Admin
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 className="text-[#F3F4F6] hover:bg-white/5 hover:text-white gap-2"

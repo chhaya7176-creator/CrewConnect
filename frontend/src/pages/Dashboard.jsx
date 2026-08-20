@@ -4,6 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { LoginDialog } from "@/components/LoginDialog";
 import { Matches } from "@/components/Matches";
 import { Documents } from "@/components/Documents";
+import { StandardCV } from "@/components/StandardCV";
 import { Movement } from "@/components/Movement";
 import { FeedbackCard } from "@/components/FeedbackCard";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning } from "lucide-react";
+import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan } from "lucide-react";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -100,6 +101,7 @@ export default function Dashboard() {
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">
             <TabTrig value="matches" icon={Users}>Matches</TabTrig>
             <TabTrig value="documents" icon={FileText}>Documents</TabTrig>
+            <TabTrig value="cv" icon={FileScan}>Standard CV</TabTrig>
             <TabTrig value="movement" icon={Navigation}>Availability</TabTrig>
             <TabTrig value="history" icon={History}>History</TabTrig>
             <TabTrig value="support" icon={MessageSquareWarning}>Support</TabTrig>
@@ -110,6 +112,9 @@ export default function Dashboard() {
           </TabsContent>
           <TabsContent value="documents" className="mt-6">
             <Documents onChange={loadDashboard} />
+          </TabsContent>
+          <TabsContent value="cv" className="mt-6">
+            <StandardCV />
           </TabsContent>
           <TabsContent value="movement" className="mt-6">
             <Movement />
