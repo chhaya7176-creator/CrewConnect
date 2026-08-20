@@ -66,8 +66,7 @@ export const ChatFlow = () => {
 
   useEffect(() => {
     setMessages([
-      { id: uid(), from: "bot", text: "⚓ Welcome to Maritime Connect! I'll help you get matched in under 2 minutes." },
-      { id: uid(), from: "bot", text: "Are you looking for a shipping job, or are you hiring crew?" },
+      { id: uid(), from: "bot", text: "⚓ Welcome to Maritime Connect! I'll help you get matched in under 2 minutes. Tap a box below to begin:" },
     ]);
   }, []);
 
@@ -115,6 +114,29 @@ export const ChatFlow = () => {
   };
 
   const step = flow[idx];
+
+  const roleBoxes = (
+    <div className="grid grid-cols-2 gap-3 animate-fade-up" data-testid="role-select">
+      <button
+        onClick={() => startRole("seeker")}
+        className="role-blink group p-4 rounded-xl border-2 border-[#FF5A00] bg-black/20 hover:bg-[#FF5A00]/10 hover:-translate-y-1 transition-transform text-left"
+        data-testid="role-seeker-btn"
+      >
+        <Ship className="w-6 h-6 text-[#FF5A00] mb-2" />
+        <div className="font-semibold text-sm">I'm a Seafarer</div>
+        <div className="text-xs text-[#8A8F9E]">Looking for a shipping job</div>
+      </button>
+      <button
+        onClick={() => startRole("provider")}
+        className="role-blink-blue group p-4 rounded-xl border-2 border-[#0066FF] bg-black/20 hover:bg-[#0066FF]/10 hover:-translate-y-1 transition-transform text-left"
+        data-testid="role-provider-btn"
+      >
+        <Building2 className="w-6 h-6 text-[#0066FF] mb-2" />
+        <div className="font-semibold text-sm">I'm Hiring Crew</div>
+        <div className="text-xs text-[#8A8F9E]">Company / job provider</div>
+      </button>
+    </div>
+  );
 
   const handleValue = async (value, label) => {
     const s = step;
@@ -258,30 +280,7 @@ export const ChatFlow = () => {
       );
     }
 
-    if (!role) {
-      return (
-        <div className="grid grid-cols-2 gap-3" data-testid="role-select">
-          <button
-            onClick={() => startRole("seeker")}
-            className="role-blink group p-4 rounded-xl border-2 border-[#FF5A00] bg-black/20 hover:bg-[#FF5A00]/10 hover:-translate-y-1 transition-transform text-left"
-            data-testid="role-seeker-btn"
-          >
-            <Ship className="w-6 h-6 text-[#FF5A00] mb-2" />
-            <div className="font-semibold text-sm">I'm a Seafarer</div>
-            <div className="text-xs text-[#8A8F9E]">Looking for a shipping job</div>
-          </button>
-          <button
-            onClick={() => startRole("provider")}
-            className="role-blink-blue group p-4 rounded-xl border-2 border-[#0066FF] bg-black/20 hover:bg-[#0066FF]/10 hover:-translate-y-1 transition-transform text-left"
-            data-testid="role-provider-btn"
-          >
-            <Building2 className="w-6 h-6 text-[#0066FF] mb-2" />
-            <div className="font-semibold text-sm">I'm Hiring Crew</div>
-            <div className="text-xs text-[#8A8F9E]">Company / job provider</div>
-          </button>
-        </div>
-      );
-    }
+    if (!role) return null;
 
     if (!step) return null;
 
@@ -447,6 +446,7 @@ export const ChatFlow = () => {
             </div>
           </div>
         )}
+        {!role && !done && <div className="pt-1">{roleBoxes}</div>}
       </div>
 
       {/* input dock */}
