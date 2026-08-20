@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2 } from "lucide-react";
+import { formatDateInput } from "@/lib/formatDate";
 
 const uid = () => Math.random().toString(36).slice(2);
 
@@ -159,7 +160,7 @@ export const ChatFlow = () => {
     // conditional: custom availability date
     if (s.key === "availability" && value === "Custom date") {
       const newFlow = [...flow];
-      newFlow.splice(idx + 1, 0, { key: "availability_date", bot: "Enter the date (DD/MM/YYYY).", type: "text", placeholder: "DD/MM/YYYY" });
+      newFlow.splice(idx + 1, 0, { key: "availability_date", bot: "Enter the date (DD/MM/YYYY).", type: "text", placeholder: "DD/MM/YYYY", format: "date" });
       setFlow(newFlow);
       advance(newFlow, idx);
       return;
@@ -385,8 +386,14 @@ export const ChatFlow = () => {
           className="bg-black/30 border-white/10 focus:ring-2 focus:ring-[#FF5A00] font-data"
           placeholder={step.placeholder || "Type your answer"}
           value={input}
-          maxLength={isOtp ? 6 : undefined}
-          onChange={(e) => setInput(isOtp || isMobile ? e.target.value.replace(isOtp ? /\D/g : /[^\d+]/g, "") : e.target.value)}
+          maxLength={isOtp ? 6 : (step.format === "date" ? 10 : undefined)}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (isOtp) setInput(v.replace(/\D/g, ""));
+            else if (isMobile) setInput(v.replace(/[^\d+]/g, ""));
+            else if (step.format === "date") setInput(formatDateInput(v));
+            else setInput(v);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (input || step.optional)) {
               handleValue(input);

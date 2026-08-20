@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Navigation, Anchor, Ship, Calendar, Plus } from "lucide-react";
+import { formatDateInput } from "@/lib/formatDate";
 
 const STATUS = ["Onboard", "On Leave", "Available Now", "Available From"];
 
@@ -69,7 +70,7 @@ export const Movement = () => {
           {(status === "Available From" || status === "On Leave") && (
             <div className="relative">
               <Calendar className="w-4 h-4 absolute left-3 top-3 text-[#8A8F9E]" />
-              <Input className="bg-black/30 border-white/10 pl-9 font-data" placeholder="Available from (DD/MM/YYYY)" value={availableFrom} onChange={(e) => setAvailableFrom(e.target.value)} data-testid="movement-date-input" />
+              <Input className="bg-black/30 border-white/10 pl-9 font-data" placeholder="Available from (DD/MM/YYYY)" maxLength={10} value={availableFrom} onChange={(e) => setAvailableFrom(formatDateInput(e.target.value))} data-testid="movement-date-input" />
             </div>
           )}
           {status === "Onboard" && (

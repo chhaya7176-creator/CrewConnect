@@ -662,7 +662,7 @@ CV_SYSTEM_PROMPT = (
     "biodata / CV and return it STRICTLY as JSON matching this exact schema (keys and nesting):\n"
     + json.dumps(STANDARD_CV_TEMPLATE)
     + "\nRules: (1) Fill every field you can find. Use \"\" for anything missing or illegible. "
-    "(2) total_sea_experience_months must be a number as string. (3) Dates strictly as DD MM YYYY (day month year, space-separated, e.g. 15 08 2026). "
+    "(2) total_sea_experience_months must be a number as string. (3) Dates strictly as DD/MM/YYYY (day/month/year with slashes, e.g. 15/08/2026). "
     "(4) sea_service and certificates are arrays of objects with the shown keys. "
     "(5) Add an extra top-level key \"uncertain_fields\": a list of dotted paths (e.g. \"personal.full_name\", "
     "\"sea_service[0].vessel_name\") whose values you GUESSED or found hard to read (common with handwriting). "
@@ -768,13 +768,13 @@ def normalize_date(s):
     for fmt in _FULL_DATE_FMTS:
         try:
             dt = datetime.strptime(t, fmt)
-            return f"{dt.day:02d} {dt.month:02d} {dt.year}"
+            return f"{dt.day:02d}/{dt.month:02d}/{dt.year}"
         except ValueError:
             pass
     for fmt in _MY_DATE_FMTS:
         try:
             dt = datetime.strptime(t, fmt)
-            return f"{dt.month:02d} {dt.year}"
+            return f"{dt.month:02d}/{dt.year}"
         except ValueError:
             pass
     return s  # leave keywords like "Immediate" untouched

@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Save, Download, Plus, Trash2, AlertTriangle, ShieldAlert } from "lucide-react";
+import { formatDateInput } from "@/lib/formatDate";
+
+const DATE_KEYS = new Set(["date_of_birth", "passport_expiry", "cdc_expiry", "from_date", "to_date", "issue_date", "expiry_date"]);
 
 const SECTIONS = {
   personal: { title: "Personal Details", fields: [
@@ -44,12 +47,14 @@ export const CVEditor = ({ cv, isAdmin = false, onSaved }) => {
 
   const setField = (section, key, value) => {
     markTouched(`${section}.${key}`);
-    setData((d) => ({ ...d, [section]: { ...d[section], [key]: value } }));
+    const v = DATE_KEYS.has(key) ? formatDateInput(value) : value;
+    setData((d) => ({ ...d, [section]: { ...d[section], [key]: v } }));
   };
 
   const setArr = (section, i, key, value) => {
     markTouched(`${section}[${i}].${key}`);
-    setData((d) => ({ ...d, [section]: d[section].map((row, idx) => (idx === i ? { ...row, [key]: value } : row)) }));
+    const v = DATE_KEYS.has(key) ? formatDateInput(value) : value;
+    setData((d) => ({ ...d, [section]: d[section].map((row, idx) => (idx === i ? { ...row, [key]: v } : row)) }));
   };
 
   const addRow = (section, cols) =>
