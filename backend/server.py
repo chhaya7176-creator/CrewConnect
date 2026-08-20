@@ -357,6 +357,10 @@ def redact_seeker(seeker: dict, unlocked: bool) -> dict:
     return out
 
 
+def is_eligible(user: dict) -> bool:
+    return bool(user.get("reg_paid") or user.get("ref_completed"))
+
+
 @api_router.get("/matches")
 async def get_matches(user=Depends(get_current_user)):
     seeker = await db.seekers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
@@ -375,11 +379,15 @@ async def get_matches(user=Depends(get_current_user)):
         result["requirement"] = provider
     elif seeker:
         result["role"] = "seeker"
+        elig = is_eligible(user)
+        result["eligible"] = elig
         providers = await db.providers.find({}, {"_id": 0}).to_list(1000)
         matched = [p for p in providers if matches_requirement(seeker, p)]
         result["matches"] = [{
             "id": p["id"],
-            "company_name": p["company_name"],
+            "company_name": p["company_name"] if elig else "🔒 Locked",
+            "company_mobile": p.get("mobile", "") if elig else "",
+            "company_email": p.get("email", "") if elig else "",
             "rank": p["rank"],
             "vessel_type": p["vessel_type"],
             "sea_time": p["sea_time"],
@@ -405,14 +413,14 @@ async def unlock_cv(req: UnlockRequest, user=Depends(get_current_user)):
     seeker = await db.seekers.find_one({"id": req.seeker_id}, {"_id": 0})
     if not seeker:
         raise HTTPException(status_code=404, detail="Profile not found")
-    # mock payment of ₹20
+    # mock payment of ₹49
     await db.unlocks.update_one(
         {"user_id": user["id"], "seeker_id": req.seeker_id},
         {"$set": {"user_id": user["id"], "seeker_id": req.seeker_id,
-                  "amount": 20, "at": datetime.now(timezone.utc).isoformat()}},
+                  "amount": 49, "at": datetime.now(timezone.utc).isoformat()}},
         upsert=True,
     )
-    return {"success": True, "amount": 20, "cv": redact_seeker(seeker, True)}
+    return {"success": True, "amount": 49, "cv": redact_seeker(seeker, True)}
 
 
 @api_router.post("/boost-profile")
@@ -424,6 +432,54 @@ async def boost_profile(user=Depends(get_current_user)):
     await db.payments.insert_one({"user_id": user["id"], "type": "boost", "amount": 100,
                                   "at": datetime.now(timezone.utc).isoformat()})
     return {"success": True, "amount": 100, "boosted": True}
+
+
+# ---------------- Seeker eligibility (view company contacts) ----------------
+class ShareIn(BaseModel):
+    type: str  # group | contact
+
+
+@api_router.get("/eligibility")
+async def get_eligibility(user=Depends(get_current_user)):
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or {}
+    return {
+        "eligible": bool(u.get("reg_paid") or u.get("ref_completed")),
+        "reg_paid": bool(u.get("reg_paid")),
+        "ref_completed": bool(u.get("ref_completed")),
+        "group_shares": u.get("ref_group_shares", 0),
+        "contact_shares": u.get("ref_contact_shares", 0),
+    }
+
+
+@api_router.post("/referral/share")
+async def referral_share(body: ShareIn, user=Depends(get_current_user)):
+    if body.type not in ("group", "contact"):
+        raise HTTPException(status_code=400, detail="type must be 'group' or 'contact'")
+    field = "ref_group_shares" if body.type == "group" else "ref_contact_shares"
+    await db.users.update_one({"id": user["id"]}, {"$inc": {field: 1}})
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return {"group_shares": u.get("ref_group_shares", 0), "contact_shares": u.get("ref_contact_shares", 0)}
+
+
+@api_router.post("/referral/claim")
+async def referral_claim(user=Depends(get_current_user)):
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    g, c = u.get("ref_group_shares", 0), u.get("ref_contact_shares", 0)
+    if g >= 2 or c >= 10:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"ref_completed": True}})
+        return {"success": True, "ref_completed": True}
+    raise HTTPException(status_code=400, detail=f"Share with 2 groups OR 10 contacts first. Progress: {g}/2 groups, {c}/10 contacts.")
+
+
+@api_router.post("/register/pay")
+async def register_pay(user=Depends(get_current_user)):
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or {}
+    if u.get("reg_paid"):
+        return {"success": True, "amount": 100, "reg_paid": True, "already": True}
+    await db.users.update_one({"id": user["id"]}, {"$set": {"reg_paid": True}})
+    await db.payments.insert_one({"user_id": user["id"], "type": "registration", "amount": 100,
+                                  "at": datetime.now(timezone.utc).isoformat()})
+    return {"success": True, "amount": 100, "reg_paid": True}
 
 
 @api_router.get("/dashboard")
@@ -488,6 +544,8 @@ async def upload_document(file: UploadFile = File(...), category: str = Query("O
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else "bin"
     data = await file.read()
     size = len(data)
+    if size > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Each file must be 5 MB or smaller. Please compress your document (PDF recommended).")
     used = await user_storage_used(user["id"])
     limit = await user_storage_limit(user["id"])
     if used + size > limit:

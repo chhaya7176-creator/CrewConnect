@@ -144,7 +144,7 @@ def test_provider_flow_and_unlock(s, provider_auth):
     r = s.post(f"{API}/unlock-cv", headers=_h(tok), json={"seeker_id": seeker_id})
     assert r.status_code == 200
     ud = r.json()
-    assert ud["amount"] == 20
+    assert ud["amount"] == 49  # price updated from 20 -> 49
     assert ud["cv"]["name"] != "🔒 Locked" and ud["cv"]["mobile"] != "🔒 Locked"
 
     r = s.get(f"{API}/matches", headers=_h(tok))

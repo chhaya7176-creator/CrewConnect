@@ -28,10 +28,14 @@ export const Documents = ({ onChange }) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setUploading(true);
+    const perFileCap = 5 * 1024 * 1024;
+    const acctMB = Math.round((usage.limit || 0) / (1024 * 1024));
     let running = usage.used;
-    let ok = 0, skipped = 0;
+    let ok = 0;
+    const errs = [];
     for (const file of files) {
-      if (running + file.size > usage.limit) { skipped++; continue; }
+      if (file.size > perFileCap) { errs.push(`${file.name}: over the 5 MB per-file limit`); continue; }
+      if (running + file.size > usage.limit) { errs.push(`${file.name}: exceeds your ${acctMB} MB account limit`); continue; }
       const fd = new FormData();
       fd.append("file", file);
       try {
@@ -41,11 +45,11 @@ export const Documents = ({ onChange }) => {
         running += file.size;
         ok++;
       } catch (err) {
-        skipped++;
+        errs.push(`${file.name}: ${err.response?.data?.detail || "upload failed"}`);
       }
     }
     if (ok) toast.success(`${ok} document${ok > 1 ? "s" : ""} uploaded`);
-    if (skipped) toast.error(`${skipped} file${skipped > 1 ? "s" : ""} skipped — exceeds your ${limitMB} MB limit`);
+    errs.forEach((m) => toast.error(m));
     setUploading(false);
     if (fileRef.current) fileRef.current.value = "";
     load();

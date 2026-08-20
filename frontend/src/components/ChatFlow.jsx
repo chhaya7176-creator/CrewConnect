@@ -451,11 +451,11 @@ export const ChatFlow = () => {
           </div>
         )}
         {!role && !done && <div className="pt-1">{roleBoxes}</div>}
-      </div>
-
-      {/* input dock */}
-      <div className="p-3 border-t border-white/10 bg-[#12131A]/80 backdrop-blur-xl min-h-[64px]">
-        {cfg ? renderInput() : <div className="text-xs text-[#8A8F9E]">Loading...</div>}
+        {role && cfg && (
+          <div className="pt-2 animate-fade-up" data-testid="chat-input-inline">
+            {renderInput()}
+          </div>
+        )}
       </div>
     </div>
   );

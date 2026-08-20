@@ -1,0 +1,52 @@
+{
+  "summary": "Tested the new seeker eligibility gating + referral/₹100 registration, company ₹49 CV unlock, storage limits and multi-file upload, plus regression (chat role blink, CV parse -> Standard CV, admin Feedback console, boost ₹100). Backend: added /app/backend/tests/test_eligibility.py (19 cases) covering GET /eligibility, POST /referral/share (group/contact counters), /referral/claim (400 until 2 groups OR 10 contacts, 200 after), /register/pay (amount 100, reg_paid), /matches seeker gating (company_name '🔒 Locked' + empty mobile/email before eligible, real values after), provider locked candidates, /unlock-cv (amount 49, reveals name/mobile/email, persists, 404 on unknown id), /documents/usage user_type crew(100MB)/company(5MB), per-file >5MB -> 400, company total 5MB -> 400. Full suite 49/49 pytest passed (fixed one stale assertion in backend_test.py that still expected unlock amount 20). Frontend E2E (all with freshly seeded accounts so the documented demo accounts keep their state): seeker gate renders with RECOMMENDED free referral + computed line-through on ₹100, vacancy cards show '🔒 Locked' + 'Company name & contact locked' and no WhatsApp button; claim button disabled at 0/2; two 'Share to group' clicks open api.whatsapp.com popups and progress reaches 2/2; 'Claim free access' -> gate disappears, eligible-banner shows, real company names + 'Contact <company> on WhatsApp' deep links (phone prefilled). Paid path: 'Pay ₹100 & register' -> immediately eligible + contacts revealed. Company: 13 candidate cards, blurred contact block with note 'Name, contact, INDOS, CDC, passport & photo hidden', button 'Unlock full CV · ₹49' -> reveals Rajesh Nair/+919812345670/email, 'Unlocked' badge + green WhatsApp deep link. Documents: input has multiple attr, 3 files uploaded at once -> '3 documents uploaded' toast and all listed; >5MB file rejected (400) and not listed. Regression: role boxes animate (role-blink / role-blink-blue), CV parse produced Standard CV with DD MM YYYY dates and red missing badge, admin +910000000000 -> /admin Feedback console lists 7 items, boost ₹100 works and appears in History. Mobile 390px: gate lays out with no horizontal overflow.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/referral/share", "issue": "No validation of `type`: any value other than 'group' (e.g. 'foo') silently increments contact_shares. Should reject with 422/400 for unknown types."},
+      {"endpoint": "POST /api/register/pay, /api/referral/claim", "issue": "Idempotency not guarded — repeated /register/pay inserts a duplicate ₹100 payment record each call (History will show multiple ₹100 registrations)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Home.jsx (How it works, step 04)", "issue": "STALE PRICING copy: 'Companies unlock full CVs for just ₹20. Boost yours for ₹100.' — unlock price is now ₹49, and the landing page never mentions the seeker referral/₹100 registration.", "selector": "pages/Home.jsx:19", "priority": "HIGH"},
+      {"component": "Dashboard.jsx History", "issue": "History row label hardcodes the old price: 'CV Unlocked (₹20)' instead of ₹49.", "selector": "pages/Dashboard.jsx:156", "priority": "MEDIUM"},
+      {"component": "Documents.jsx handleFiles", "issue": "A >5MB file is rejected by the backend (400 'Each file must be 5 MB or smaller') but the UI shows the wrong reason: '1 file skipped — exceeds your 100 MB limit'. Per-file cap should be checked client-side / the backend detail surfaced.", "selector": "[data-testid=\"doc-file-input\"]", "priority": "MEDIUM"},
+      {"component": "Matches.jsx provider card", "issue": "The lock overlay text 'Name, contact, INDOS, CDC, passport & photo hidden' is rendered on top of the blurred Name/Mobile/Email rows, so the two overlap and the note is hard to read on smaller cards.", "selector": "[data-testid^=\"match-card-\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard > Matches (seeker)", "issues": ["Vacancy cards whose provider has no summary keep an empty 48px block (e.g. 'Priority Test Co' card) leaving a visible gap"]},
+      {"screen": "Mobile 390px", "issues": ["Navbar brand wraps to 3 lines ('SMART / CREWING / CREW · MATCH · SAIL') and overlaps the top edge", "Share to group / Send to contact buttons are 32px tall — below the 44px touch-target guideline"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_eligibility.py",
+    "/app/backend/tests/seed_frontend_accounts.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix stale ₹20 pricing copy in pages/Home.jsx (step 04) and pages/Dashboard.jsx History label -> ₹49; consider advertising the free-referral unlock on the landing page",
+    "Show the correct reason when a file exceeds the 5MB per-file cap in Documents.jsx (surface backend detail instead of the account-limit message)",
+    "Validate `type` in POST /api/referral/share (only 'group'|'contact') and make /register/pay idempotent (no duplicate payment rows)",
+    "Reposition the provider card lock note so it doesn't overlap the blurred contact fields; hide the summary block when summary is empty"
+  ],
+  "critical_code_review_comments": [
+    "Documents.jsx handleFiles closes over `limitMB` which is declared later in the component body — it works only because the handler runs post-render; move the const above the handler to avoid a future TDZ crash.",
+    "Referral eligibility is entirely self-reported (click count + Claim); a user can call POST /api/referral/share twice via the API and claim. Acceptable for the mocked demo but should be flagged as non-verifiable.",
+    "server.py is 1158 lines — consider splitting (auth / matching+eligibility / documents / cv / admin) per the 700-line guideline."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_eligibility.py (new)",
+    "/app/backend/tests/seed_frontend_accounts.py (new)",
+    "/app/backend/tests/backend_test.py (stale unlock amount assertion 20 -> 49)"
+  ],
+  "success_rate": {"backend": "100% (49/49 pytest)", "frontend": "100% of the requested gating/unlock/upload/regression flows passed; 4 UI/copy defects found"},
+  "seed_data_creation": "Seeded via /app/backend/tests/seed_frontend_accounts.py: seekers +919111100001 (used for referral claim -> now eligible), +919111100002 (paid ₹100 -> eligible), +919111100004 (still NOT eligible, use for gate re-tests), provider +919111100003 'TEST QA Marine Ltd' (unlocked 1 CV). Documented demo accounts (+919555000111 not-eligible, +15559998888 company, +919777001122 eligible) were deliberately left untouched by the UI tests and re-verified as intact by pytest TestDemoAccounts.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "OTP 123456 for all. Fresh QA accounts: +919111100004 (seeker, gate still locked), +919111100003 (company). Demo: +919555000111 / +15559998888 / +919777001122 / admin +910000000000",
+  "context_for_next_testing_agent": "Run pytest from /app/backend (pytest.ini has -n 2 --dist loadscope): tests/backend_test.py (15), tests/test_cv.py (15), tests/test_eligibility.py (19) = 49 passing. page.goto must use wait_until='domcontentloaded'; on /dashboard the login dialog AUTO-OPENS when logged out, so do NOT click nav-login-btn first (the dialog overlay intercepts the click) — check for [data-testid=\"login-mobile-input\"] and only click the login button if absent. Logout via nav-logout-btn before switching users. Share/WhatsApp buttons open api.whatsapp.com (not wa.me) — assert on 'whatsapp' in the popup URL. Seeker eligibility is one-way (no reset endpoint), so always seed a NEW mobile + POST /api/seeker/profile before re-testing the gate.",
+  "rca_of_the_issue": "The two ₹20 strings are leftovers from the earlier pricing model (unlock was ₹20) and were not updated when unlock_cv moved to 49 in server.py; the misleading upload error comes from Documents.jsx treating every failed POST /api/documents as a quota skip instead of reading the backend's 400 detail."
+}

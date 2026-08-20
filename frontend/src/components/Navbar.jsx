@@ -18,8 +18,8 @@ export const Navbar = ({ onLogin }) => {
             <Anchor className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
           <div className="leading-none">
-            <div className="font-heading font-extrabold text-lg tracking-tight">SMART CREWING</div>
-            <div className="text-[10px] font-data text-[#8A8F9E] tracking-widest uppercase">Crew · Match · Sail</div>
+            <div className="font-heading font-extrabold text-lg tracking-tight whitespace-nowrap">SMART CREWING</div>
+            <div className="hidden sm:block text-[10px] font-data text-[#8A8F9E] tracking-widest uppercase">Crew · Match · Sail</div>
           </div>
         </Link>
 

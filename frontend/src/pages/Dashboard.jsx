@@ -153,7 +153,7 @@ const HistoryView = ({ data }) => {
   const items = [
     ...(data?.seeker_profiles || []).map((s) => ({ type: "Seeker profile", label: `${s.rank} · ${s.vessel_type}`, at: s.created_at })),
     ...(data?.provider_requirements || []).map((p) => ({ type: "Requirement", label: `${p.rank} · ${p.vessel_type}`, at: p.created_at })),
-    ...(data?.unlocks || []).map((u) => ({ type: "CV Unlocked (₹20)", label: `Candidate ${u.seeker_id.slice(0, 6)}`, at: u.at })),
+    ...(data?.unlocks || []).map((u) => ({ type: "CV Unlocked (₹49)", label: `Candidate ${u.seeker_id.slice(0, 6)}`, at: u.at })),
     ...(data?.payments || []).map((p) => ({ type: `Payment (₹${p.amount})`, label: p.type, at: p.at })),
   ].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
 
