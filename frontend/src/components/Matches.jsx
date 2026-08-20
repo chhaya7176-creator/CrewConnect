@@ -254,7 +254,7 @@ export const Matches = () => {
                 <Field label="Vessel" value={p.vessel_type} />
                 <Field label="Min. sea time" value={p.sea_time} tag={p.sea_time_priority} />
                 <Field label="COC" value={Array.isArray(p.coc) ? p.coc.join(", ") : p.coc} tag={p.coc_priority} />
-                <Field label="US Visa" value={p.us_visa} tag={p.us_visa_priority} />
+                <Field label="US Visa" value={p.us_visa} />
                 <Field label="Joining" value={p.availability} tag={p.availability_priority} />
               </div>
               {eligible ? (

@@ -1,0 +1,22 @@
+{
+  "summary": "Targeted bug-fix verification for Smart Crewing. Backend: 4/4 pytest tests passed (/api/config option lists, POST /api/provider/requirement succeeds without us_visa_priority and defaults to 'Preferred', 422 on missing required fields, GET /api/matches returns 15 matches for seeker +919555000111 with no _id leakage). Frontend: full COMPANY chat flow driven end-to-end — US Visa question appears EXACTLY ONCE ('US Visa requirement for this role?' with options Must Have / Preferred / Not Required) and the removed 'US Visa Mandatory or Preferred' step is confirmed absent (count 0). COC multiselect answer bubble reads 'Any of the following 3 countries: India, Indonesia, UK'. Provider submission completed (done panel + referral link shown). Regression: SEEKER flow has exactly ONE US Visa question (Valid / Not Valid / Not Available). Seeker Dashboard > Matches renders 15 vacancy cards; US Visa field has NO Mandatory/Preferred tag while Min sea time / COC / Joining still show their tags.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_bugfix_usvisa.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AI summary (/api/ai/summary) took >8s in the provider flow (textarea still showed 'Generating your profile summary...' after 8s); submit button stays disabled meanwhile. Consider a visible progress/timeout hint — not a defect, informational.",
+    "Doc mismatch (minor): /app/memory/test_credentials.md lists +919555000111 as 'seeker with matches but NOT eligible (unlock gate)', but that account is now eligible/unlocked (contacts revealed) due to earlier test claims. Update the credentials doc or reset the account if the gate needs demoing."
+  ],
+  "updated_files": ["/app/backend/tests/test_bugfix_usvisa.py"],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "seed_data_creation": "Created one provider requirement via chat UI (company 'TEST_QA Shipping', mobile +919812345670) and one via API (company 'TEST_Co'); these appear in seeker match lists.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Chat flow lives on route '/' (NOT '/chat'); Home renders ChatFlow in the right column. Provider step order verified: rank -> vessel -> sea_time -> sea_time_priority -> coc(multiselect, 19 options) -> coc_priority -> us_visa -> mobile -> otp -> consent -> company_name -> email -> availability -> availability_priority -> review. Auth endpoints are /api/auth/request-otp and /api/auth/verify-otp (no /send-otp). There is no GET /api/provider/requirement; provider requirement is echoed inside GET /api/matches under 'requirement'. Reusable test file: /app/backend/tests/test_bugfix_usvisa.py.",
+  "rca_of_the_issue": "Both reported bugs are fixed at source: buildProviderSteps() in ChatFlow.jsx no longer contains the us_visa_priority step, and the multiselect Confirm handler passes the label 'Any of the following N countries: ...'. Matches.jsx no longer passes a tag to the seeker card US Visa Field. Backend ProviderRequirement.us_visa_priority is Optional with default 'Preferred', so payloads without it are accepted."
+}

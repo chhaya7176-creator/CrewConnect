@@ -34,10 +34,9 @@ const buildProviderSteps = (cfg) => [
   { key: "vessel_type", bot: "Which vessel type is this for?", type: "dropdown", options: cfg.vessel_types },
   { key: "sea_time", bot: "Minimum sea time experience required?", type: "quick", options: cfg.sea_time },
   { key: "sea_time_priority", bot: "Is this experience duration Mandatory or Preferred?", type: "quick", options: ["Mandatory", "Preferred"] },
-  { key: "coc", bot: "Which COC issuing countries/authorities are acceptable? (Select one or more)", type: "multiselect", options: cfg.coc_provider },
+  { key: "coc", bot: "Which COC issuing countries/authorities are acceptable? Select all that apply — crew holding any of the following will be matched.", type: "multiselect", options: cfg.coc_provider },
   { key: "coc_priority", bot: "Is this COC requirement Mandatory or Preferred?", type: "quick", options: ["Mandatory", "Preferred"] },
   { key: "us_visa", bot: "US Visa requirement for this role?", type: "quick", options: cfg.us_visa_provider },
-  { key: "us_visa_priority", bot: "Is the US Visa requirement Mandatory or Preferred?", type: "quick", options: ["Mandatory", "Preferred"] },
   { key: "mobile", bot: "Enter your mobile number with country code for OTP verification.", type: "mobile", placeholder: "+91XXXXXXXXXX" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
   { key: "consent", bot: "Do you agree to share your requirement with relevant seafarers?", type: "quick", options: ["Yes", "No"] },
@@ -343,7 +342,7 @@ export const ChatFlow = () => {
             size="sm"
             className="bg-[#FF5A00] hover:bg-[#E04F00] rounded-full"
             disabled={!multi.length}
-            onClick={() => handleValue(multi, multi.join(", "))}
+            onClick={() => handleValue(multi, `Any of the following ${multi.length} countr${multi.length === 1 ? "y" : "ies"}: ${multi.join(", ")}`)}
             data-testid="multiselect-confirm"
           >
             Confirm ({multi.length})
