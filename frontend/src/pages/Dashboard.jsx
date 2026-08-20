@@ -100,7 +100,7 @@ export default function Dashboard() {
         <Tabs defaultValue="matches" className="w-full">
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">
             <TabTrig value="matches" icon={Users}>Matches</TabTrig>
-            <TabTrig value="browse" icon={Globe}>Browse All</TabTrig>
+            <TabTrig value="browse" icon={Globe}>{providerReq ? "All Crew" : "All Vacancies"}</TabTrig>
             <TabTrig value="posts" icon={ClipboardList}>My Posts</TabTrig>
             <TabTrig value="documents" icon={FileText}>Documents</TabTrig>
             <TabTrig value="cv" icon={FileScan}>Standard CV</TabTrig>
