@@ -361,6 +361,26 @@ def is_eligible(user: dict) -> bool:
     return bool(user.get("reg_paid") or user.get("ref_completed"))
 
 
+def provider_card(p: dict, elig: bool) -> dict:
+    return {
+        "id": p["id"],
+        "company_name": p["company_name"] if elig else "🔒 Locked",
+        "company_mobile": p.get("mobile", "") if elig else "",
+        "company_email": p.get("email", "") if elig else "",
+        "rank": p["rank"],
+        "vessel_type": p["vessel_type"],
+        "sea_time": p["sea_time"],
+        "sea_time_priority": p.get("sea_time_priority", "Mandatory"),
+        "coc": p["coc"],
+        "coc_priority": p.get("coc_priority", "Mandatory"),
+        "us_visa": p["us_visa"],
+        "us_visa_priority": p.get("us_visa_priority", "Preferred"),
+        "availability": p["availability"],
+        "availability_priority": p.get("availability_priority", "Preferred"),
+        "summary": p.get("summary", ""),
+    }
+
+
 @api_router.get("/matches")
 async def get_matches(user=Depends(get_current_user)):
     seeker = await db.seekers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
@@ -383,24 +403,29 @@ async def get_matches(user=Depends(get_current_user)):
         result["eligible"] = elig
         providers = await db.providers.find({}, {"_id": 0}).to_list(1000)
         matched = [p for p in providers if matches_requirement(seeker, p)]
-        result["matches"] = [{
-            "id": p["id"],
-            "company_name": p["company_name"] if elig else "🔒 Locked",
-            "company_mobile": p.get("mobile", "") if elig else "",
-            "company_email": p.get("email", "") if elig else "",
-            "rank": p["rank"],
-            "vessel_type": p["vessel_type"],
-            "sea_time": p["sea_time"],
-            "sea_time_priority": p.get("sea_time_priority", "Mandatory"),
-            "coc": p["coc"],
-            "coc_priority": p.get("coc_priority", "Mandatory"),
-            "us_visa": p["us_visa"],
-            "us_visa_priority": p.get("us_visa_priority", "Preferred"),
-            "availability": p["availability"],
-            "availability_priority": p.get("availability_priority", "Preferred"),
-            "summary": p.get("summary", ""),
-        } for p in matched]
+        result["matches"] = [provider_card(p, elig) for p in matched]
         result["profile"] = seeker
+    return result
+
+
+@api_router.get("/browse")
+async def browse_all(user=Depends(get_current_user)):
+    provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
+    seeker = await db.seekers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
+    result = {"role": None, "matches": []}
+    if provider and not seeker:
+        result["role"] = "provider"
+        unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
+        unlocked_ids = {u["seeker_id"] for u in unlocks}
+        seekers = await db.seekers.find({}, {"_id": 0}).to_list(2000)
+        seekers.sort(key=lambda s: (not s.get("boosted", False), s.get("created_at", "")))
+        result["matches"] = [redact_seeker(s, s["id"] in unlocked_ids) for s in seekers]
+    else:
+        result["role"] = "seeker"
+        elig = is_eligible(user)
+        result["eligible"] = elig
+        providers = await db.providers.find({}, {"_id": 0}).to_list(2000)
+        result["matches"] = [provider_card(p, elig) for p in providers]
     return result
 
 

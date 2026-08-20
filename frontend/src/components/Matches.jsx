@@ -128,12 +128,12 @@ const EligibilityGate = ({ referralCode, onEligible }) => {
   );
 };
 
-export const Matches = () => {
+export const Matches = ({ browse = false }) => {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(null);
 
-  const load = () => api.get("/matches").then((r) => setRes(r.data)).catch(() => setRes({ role: null, matches: [] }));
-  useEffect(() => { load(); }, []);
+  const load = () => api.get(browse ? "/browse" : "/matches").then((r) => setRes(r.data)).catch(() => setRes({ role: null, matches: [] }));
+  useEffect(() => { load(); }, [browse]);
 
   const unlock = async (id) => {
     setBusy(id);

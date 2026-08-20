@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan } from "lucide-react";
+import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList } from "lucide-react";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -100,6 +100,8 @@ export default function Dashboard() {
         <Tabs defaultValue="matches" className="w-full">
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">
             <TabTrig value="matches" icon={Users}>Matches</TabTrig>
+            <TabTrig value="browse" icon={Globe}>Browse All</TabTrig>
+            <TabTrig value="posts" icon={ClipboardList}>My Posts</TabTrig>
             <TabTrig value="documents" icon={FileText}>Documents</TabTrig>
             <TabTrig value="cv" icon={FileScan}>Standard CV</TabTrig>
             <TabTrig value="movement" icon={Navigation}>Availability</TabTrig>
@@ -109,6 +111,12 @@ export default function Dashboard() {
 
           <TabsContent value="matches" className="mt-6">
             <Matches />
+          </TabsContent>
+          <TabsContent value="browse" className="mt-6">
+            <Matches browse />
+          </TabsContent>
+          <TabsContent value="posts" className="mt-6">
+            <MyPosts data={data} />
           </TabsContent>
           <TabsContent value="documents" className="mt-6">
             <Documents onChange={loadDashboard} />
@@ -167,6 +175,32 @@ const HistoryView = ({ data }) => {
             <div className="text-xs text-[#8A8F9E]">{it.label}</div>
           </div>
           <div className="text-xs font-data text-[#8A8F9E]">{it.at ? new Date(it.at).toLocaleString() : ""}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const MyPosts = ({ data }) => {
+  const reqs = data?.provider_requirements || [];
+  const profs = data?.seeker_profiles || [];
+  const isCompany = reqs.length > 0;
+  const items = isCompany ? reqs : profs;
+  if (!items.length) return <Empty text="You haven't posted anything yet. Start in the chat on the home page." />;
+  return (
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="my-posts">
+      {items.map((p) => (
+        <div key={p.id} className="rounded-xl border border-white/10 bg-[#0A0B12] p-5" data-testid={`post-${p.id}`}>
+          <div className="font-heading font-bold">{isCompany ? p.company_name : p.name}</div>
+          <div className="text-xs text-[#8A8F9E] mb-3">{p.rank} · {p.vessel_type}</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div><span className="text-[#8A8F9E] text-[10px] uppercase">Sea time</span><div className="font-data">{p.sea_time}</div></div>
+            <div><span className="text-[#8A8F9E] text-[10px] uppercase">COC</span><div className="font-data">{Array.isArray(p.coc) ? p.coc.join(", ") : p.coc}</div></div>
+            <div><span className="text-[#8A8F9E] text-[10px] uppercase">US Visa</span><div className="font-data">{p.us_visa}</div></div>
+            <div><span className="text-[#8A8F9E] text-[10px] uppercase">Availability</span><div className="font-data">{p.availability}</div></div>
+          </div>
+          {p.boosted && <span className="inline-block mt-3 text-[10px] px-2 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">BOOSTED</span>}
+          <div className="text-[10px] text-[#8A8F9E] mt-3 font-data">Posted {p.created_at ? new Date(p.created_at).toLocaleDateString() : ""}</div>
         </div>
       ))}
     </div>
