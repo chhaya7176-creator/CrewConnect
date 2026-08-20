@@ -6,9 +6,16 @@ import { api } from "@/lib/api";
 import { Empty } from "@/pages/Dashboard";
 import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor } from "lucide-react";
 
-const Field = ({ label, value }) => (
+const Field = ({ label, value, tag }) => (
   <div>
-    <div className="text-[10px] uppercase tracking-wider text-[#8A8F9E]">{label}</div>
+    <div className="text-[10px] uppercase tracking-wider text-[#8A8F9E] flex items-center gap-1.5 flex-wrap">
+      {label}
+      {tag && (
+        <span className={`text-[9px] px-1.5 py-0.5 rounded-full border ${tag === "Mandatory" ? "bg-[#ef4444]/15 text-[#ff6b6b] border-[#ef4444]/40" : "bg-[#DFFF00]/15 text-[#DFFF00] border-[#DFFF00]/40"}`}>
+          {tag}
+        </span>
+      )}
+    </div>
     <div className="text-sm font-data mt-0.5">{value}</div>
   </div>
 );
@@ -115,9 +122,10 @@ export const Matches = () => {
           <p className="text-xs text-[#8A8F9E] mb-4 min-h-[48px]">{p.summary}</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Vessel" value={p.vessel_type} />
-            <Field label="Min. sea time" value={p.sea_time} />
-            <Field label="US Visa" value={p.us_visa} />
-            <Field label="Joining" value={p.availability} />
+            <Field label="Min. sea time" value={p.sea_time} tag={p.sea_time_priority} />
+            <Field label="COC" value={Array.isArray(p.coc) ? p.coc.join(", ") : p.coc} tag={p.coc_priority} />
+            <Field label="US Visa" value={p.us_visa} tag={p.us_visa_priority} />
+            <Field label="Joining" value={p.availability} tag={p.availability_priority} />
           </div>
           <div className="mt-4 flex items-center gap-2 text-xs text-[#25D366]">
             <Ship className="w-3.5 h-3.5" /> You match this requirement

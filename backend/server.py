@@ -861,7 +861,7 @@ def build_cv_pdf(data: dict) -> bytes:
 
     p = data.get("personal", {})
     elems.append(Paragraph(p.get("full_name") or "Seafarer CV", title))
-    elems.append(Paragraph("STANDARD MARITIME CV — Maritime Connect", small))
+    elems.append(Paragraph("STANDARD MARITIME CV — Smart Crewing", small))
     elems.append(Spacer(1, 8))
 
     def kv_table(pairs):
@@ -938,6 +938,15 @@ def build_cv_pdf(data: dict) -> bytes:
 
 
 # ---------------- Admin ----------------
+@api_router.get("/admin/feedback")
+async def admin_list_feedback(admin=Depends(require_admin)):
+    items = await db.feedback.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    for it in items:
+        u = await db.users.find_one({"id": it.get("user_id")}, {"_id": 0})
+        it["mobile"] = u.get("mobile") if u else ""
+    return items
+
+
 @api_router.get("/admin/cvs")
 async def admin_list_cvs(admin=Depends(require_admin)):
     items = await db.parsed_cvs.find({}, {"_id": 0}).sort("updated_at", -1).to_list(500)
@@ -991,7 +1000,7 @@ async def list_movements(user=Depends(get_current_user)):
 
 @api_router.get("/")
 async def root():
-    return {"message": "Maritime Connect API"}
+    return {"message": "Smart Crewing API"}
 
 
 # ---------------- Seed sample data ----------------

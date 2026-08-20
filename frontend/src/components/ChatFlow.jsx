@@ -70,7 +70,7 @@ export const ChatFlow = () => {
 
   useEffect(() => {
     setMessages([
-      { id: uid(), from: "bot", text: "⚓ Welcome to Maritime Connect! I'll help you get matched in under 2 minutes. Tap a box below to begin:" },
+      { id: uid(), from: "bot", text: "⚓ Welcome to Smart Crewing! I'll help you get matched in under 2 minutes. Tap a box below to begin:" },
     ]);
   }, []);
 
@@ -264,7 +264,7 @@ export const ChatFlow = () => {
                 size="sm"
                 className="bg-[#25D366] hover:bg-[#1da851] text-black font-semibold shrink-0"
                 onClick={() => {
-                  const text = encodeURIComponent(`Join me on Maritime Connect — get matched with shipping ${role === "seeker" ? "jobs" : "crew"}! ${done.link}`);
+                  const text = encodeURIComponent(`Join me on Smart Crewing — get matched with shipping ${role === "seeker" ? "jobs" : "crew"}! ${done.link}`);
                   window.open(`https://wa.me/?text=${text}`, "_blank");
                 }}
                 data-testid="share-whatsapp-btn"
@@ -420,7 +420,7 @@ export const ChatFlow = () => {
           <Anchor className="w-5 h-5 text-black" strokeWidth={2.5} />
         </div>
         <div className="leading-tight">
-          <div className="font-semibold text-sm">Maritime Connect Bot</div>
+          <div className="font-semibold text-sm">Smart Crewing Bot</div>
           <div className="text-[11px] text-[#25D366] flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-[#25D366]" /> online
           </div>
