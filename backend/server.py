@@ -430,12 +430,38 @@ async def submit_feedback(fb: FeedbackIn, user=Depends(get_current_user)):
 
 
 # ---------------- Documents ----------------
+MAX_TOTAL_BYTES = 100 * 1024 * 1024  # 100 MB per user
+
+
+async def user_storage_used(user_id: str) -> int:
+    pipeline = [
+        {"$match": {"user_id": user_id, "is_deleted": False}},
+        {"$group": {"_id": None, "total": {"$sum": "$size"}}},
+    ]
+    agg = await db.documents.aggregate(pipeline).to_list(1)
+    return agg[0]["total"] if agg else 0
+
+
+@api_router.get("/documents/usage")
+async def documents_usage(user=Depends(get_current_user)):
+    used = await user_storage_used(user["id"])
+    return {"used": used, "limit": MAX_TOTAL_BYTES, "remaining": max(0, MAX_TOTAL_BYTES - used)}
+
+
 @api_router.post("/documents")
 async def upload_document(file: UploadFile = File(...), category: str = Query("Other"),
                           user=Depends(get_current_user)):
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else "bin"
-    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     data = await file.read()
+    size = len(data)
+    used = await user_storage_used(user["id"])
+    if used + size > MAX_TOTAL_BYTES:
+        remaining_mb = max(0, MAX_TOTAL_BYTES - used) / (1024 * 1024)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Storage limit of 100 MB reached. You have {remaining_mb:.1f} MB free.",
+        )
+    path = f"{APP_NAME}/uploads/{user['id']}/{uuid.uuid4()}.{ext}"
     content_type = file.content_type or MIME_TYPES.get(ext, "application/octet-stream")
     result = put_object(path, data, content_type)
     doc = {
@@ -445,7 +471,7 @@ async def upload_document(file: UploadFile = File(...), category: str = Query("O
         "original_filename": file.filename,
         "category": category,
         "content_type": content_type,
-        "size": result.get("size", len(data)),
+        "size": result.get("size", size),
         "is_deleted": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
