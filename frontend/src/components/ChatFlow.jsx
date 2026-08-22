@@ -223,7 +223,7 @@ export const ChatFlow = () => {
     // OTP -> verify + login
     if (s.key === "otp") {
       try {
-        const res = await api.post("/auth/verify-otp", { mobile: form.mobile, otp: value });
+        const res = await api.post("/auth/verify-otp", { mobile: form.mobile, otp: value, role });
         login(res.data.token, res.data.user);
         toast.success("Mobile verified");
         advance(flow, idx);

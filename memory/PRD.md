@@ -32,6 +32,10 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Object storage document vault; movement timeline; feedback/support.
 - Tested: 15/15 backend pass, 100% frontend E2E pass.
 
+## Fixes (2026-06)
+- **Mobile normalization** (`mobile_key` = last 10 digits) in request-otp/verify-otp + startup backfill of legacy users. Root cause of "posted requirement/profile not showing in dashboard/My Posts + no matches": the chat flow and login dialog matched mobile as an exact string, so the same phone typed with vs without `+91` created two separate user accounts. Verified: bare / `+91` / spaced formats all resolve to one uid with identical posts & matches.
+- `/api/browse` role isolation confirmed working (Company sees only Crew, Crew sees only Vacancies).
+
 ## Backlog / Remaining
 - P1: Real SMS OTP (Twilio) and real payments (Stripe/Razorpay) for production
 - P1: Real WhatsApp Business API integration (Meta/Twilio)

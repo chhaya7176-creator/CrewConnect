@@ -128,6 +128,7 @@ class OTPRequest(BaseModel):
 class OTPVerify(BaseModel):
     mobile: str
     otp: str
+    role: Optional[str] = None
 
 
 class SummaryRequest(BaseModel):
@@ -175,6 +176,12 @@ class FeedbackIn(BaseModel):
 
 
 # ---------------- Auth helpers ----------------
+def mobile_key(m: str) -> str:
+    """Canonical identity for a phone number: last 10 digits (ignores +, spaces, country code)."""
+    digits = "".join(c for c in (m or "") if c.isdigit())
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
 def create_token(user_id: str, mobile: str) -> str:
     payload = {
         "user_id": user_id,
@@ -212,9 +219,11 @@ async def request_otp(req: OTPRequest):
     if len(digits) < 10 or len(digits) > 15:
         raise HTTPException(status_code=400, detail="Mobile number must be 10–15 digits")
     otp = "123456"  # simulated OTP for demo
+    key = mobile_key(req.mobile)
     await db.otps.update_one(
-        {"mobile": req.mobile},
-        {"$set": {"mobile": req.mobile, "otp": otp, "created_at": datetime.now(timezone.utc).isoformat()}},
+        {"mobile_key": key},
+        {"$set": {"mobile_key": key, "mobile": req.mobile, "otp": otp,
+                  "created_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True,
     )
     # In demo mode we return the OTP so the UI can show it
@@ -223,18 +232,29 @@ async def request_otp(req: OTPRequest):
 
 @api_router.post("/auth/verify-otp")
 async def verify_otp(req: OTPVerify):
-    record = await db.otps.find_one({"mobile": req.mobile}, {"_id": 0})
+    key = mobile_key(req.mobile)
+    record = await db.otps.find_one({"mobile_key": key}, {"_id": 0}) \
+        or await db.otps.find_one({"mobile": req.mobile}, {"_id": 0})
     if not record or record["otp"] != req.otp:
         raise HTTPException(status_code=400, detail="Invalid OTP")
-    user = await db.users.find_one({"mobile": req.mobile}, {"_id": 0})
+    # Look up user by canonical key first, then fall back to legacy exact-mobile match.
+    user = await db.users.find_one({"mobile_key": key}, {"_id": 0}) \
+        or await db.users.find_one({"mobile": req.mobile}, {"_id": 0})
     if not user:
         user = {
             "id": str(uuid.uuid4()),
             "mobile": req.mobile,
+            "mobile_key": key,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.users.insert_one(dict(user))
+    elif not user.get("mobile_key"):
+        await db.users.update_one({"id": user["id"]}, {"$set": {"mobile_key": key}})
+        user["mobile_key"] = key
     token = create_token(user["id"], user["mobile"])
+    if req.role in ("seeker", "provider"):
+        await db.users.update_one({"id": user["id"]}, {"$set": {"role": req.role}})
+        user["role"] = req.role
     user["is_admin"] = user["mobile"] in ADMIN_MOBILES
     return {"token": token, "user": user}
 
@@ -413,7 +433,9 @@ async def browse_all(user=Depends(get_current_user)):
     provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
     seeker = await db.seekers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
     result = {"role": None, "matches": []}
-    if provider and not seeker:
+    urole = user.get("role")
+    is_company = (urole == "provider") if urole in ("provider", "seeker") else (bool(provider) and not seeker)
+    if is_company:
         result["role"] = "provider"
         unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
         unlocked_ids = {u["seeker_id"] for u in unlocks}
@@ -1162,6 +1184,9 @@ async def seed_data():
             })
             await db.providers.insert_one(doc)
     logger.info("Seed data ensured")
+    # backfill canonical mobile_key on legacy users so they log in with/without country code
+    async for u in db.users.find({"mobile_key": {"$exists": False}}, {"id": 1, "mobile": 1}):
+        await db.users.update_one({"id": u["id"]}, {"$set": {"mobile_key": mobile_key(u.get("mobile", ""))}})
     # migrate stored CVs to DD MM YYYY date format
     async for cv in db.parsed_cvs.find({}):
         data = cv.get("data", {})
