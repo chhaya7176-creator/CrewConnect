@@ -4,7 +4,7 @@ import { LoginDialog } from "@/components/LoginDialog";
 import { ChatFlow } from "@/components/ChatFlow";
 import { ShieldCheck, Zap, IndianRupee, Users, TrendingUp, FileCheck2 } from "lucide-react";
 
-const SEA_BG = "https://images.pexels.com/photos/33315751/pexels-photo-33315751.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=1200&w=1920";
+const SEA_BG = "https://static.prod-images.emergentagent.com/jobs/73dfd5f5-2c66-45fa-b175-89ba7a0303b2/images/e62d5c49f26a3b43b6dfc45af3987d1d02fe614561838c0798821e241416076a.jpeg";
 
 const STATS = [
   { label: "Active Seafarers", value: "12,400+", icon: Users },
@@ -25,7 +25,7 @@ export default function Home() {
   return (
     <div className="min-h-screen relative">
       <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${SEA_BG})` }} />
-      <div className="fixed inset-0 z-0" style={{ background: "linear-gradient(180deg, rgba(8,12,22,0.12) 0%, rgba(6,11,20,0.38) 50%, rgba(3,8,16,0.82) 100%)" }} />
+      <div className="fixed inset-0 z-0" style={{ background: "linear-gradient(180deg, rgba(8,12,22,0.06) 0%, rgba(6,11,20,0.26) 52%, rgba(3,8,16,0.72) 100%)" }} />
       <Navbar onLogin={() => setLoginOpen(true)} />
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
 
