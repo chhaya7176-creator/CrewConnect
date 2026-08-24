@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Bookmark, Trash2, MessageCircle, IndianRupee } from "lucide-react";
+import { Bookmark, Trash2, MessageCircle, IndianRupee, Unlock } from "lucide-react";
+import { buildContactMessage, waLink } from "@/lib/waMessage";
 
 const Empty = ({ text }) => (
   <div className="text-center py-12 text-[#8A8F9E] text-sm border border-dashed border-white/10 rounded-xl">{text}</div>
@@ -15,14 +16,12 @@ const Info = ({ label, value }) => (
   </div>
 );
 
-const waLink = (num, msg) =>
-  `https://wa.me/${(num || "").replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
-
-export const SavedSearches = () => {
+export const SavedSearches = ({ onChange }) => {
   const [list, setList] = useState(null);
   const [req, setReq] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [results, setResults] = useState({});
+  const [freeLeft, setFreeLeft] = useState(0);
   const [busy, setBusy] = useState(false);
 
   const load = () => api.get("/saved-searches").then((r) => setList(r.data.searches)).catch(() => setList([]));
@@ -55,6 +54,7 @@ export const SavedSearches = () => {
     setOpenId(id);
     const r = await api.get(`/saved-searches/${id}/results`);
     setResults((m) => ({ ...m, [id]: r.data.results }));
+    setFreeLeft(r.data.free_unlocks_left ?? 0);
     load();
   };
 
@@ -62,10 +62,12 @@ export const SavedSearches = () => {
 
   const unlock = async (sid, seekerId) => {
     try {
-      await api.post("/unlock-cv", { seeker_id: seekerId });
-      toast.success("CV unlocked! (₹49 — demo)");
-      const r = await api.get(`/saved-searches/${sid}/results`);
-      setResults((m) => ({ ...m, [sid]: r.data.results }));
+      const r = await api.post("/unlock-cv", { seeker_id: seekerId });
+      toast.success(r.data.amount ? "CV unlocked! (₹49 — demo)" : "CV unlocked — free!");
+      const rr = await api.get(`/saved-searches/${sid}/results`);
+      setResults((m) => ({ ...m, [sid]: rr.data.results }));
+      setFreeLeft(rr.data.free_unlocks_left ?? 0);
+      onChange?.();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Unlock failed");
     }
@@ -139,7 +141,7 @@ export const SavedSearches = () => {
                             <Button
                               size="sm"
                               className="w-full bg-[#25D366] hover:bg-[#1da851] text-black font-semibold gap-2 rounded-full"
-                              onClick={() => window.open(waLink(c.mobile, `Hi ${c.name}, we found your profile on Smart Crewing for a ${c.rank} role.`), "_blank")}
+                              onClick={() => window.open(waLink(c.mobile, buildContactMessage({ crewName: c.name, position: c.rank, companyEmail: req?.email, companyName: req?.company_name })), "_blank")}
                               data-testid={`result-wa-${c.id}`}
                             >
                               <MessageCircle className="w-4 h-4" /> {c.name}
@@ -153,7 +155,8 @@ export const SavedSearches = () => {
                                 onClick={() => unlock(s.id, c.id)}
                                 data-testid={`result-unlock-${c.id}`}
                               >
-                                <IndianRupee className="w-4 h-4" /> Unlock CV · ₹49
+                                {freeLeft > 0 ? <Unlock className="w-4 h-4" /> : <IndianRupee className="w-4 h-4" />}
+                                {freeLeft > 0 ? `Unlock free · ${freeLeft} left` : "Unlock full CV · ₹49"}
                               </Button>
                             </>
                           )}

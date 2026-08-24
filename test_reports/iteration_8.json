@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only testing of the two new rules for company 9930867220 (Demo, gyanindramishra@gmail.com). Verified: (1) free-10-then-₹49 unlock quota end-to-end in the All Crew tab — first button read 'Unlock free · 10 left', unlocking showed toast 'CV unlocked — free!', card Name/Mobile/Email revealed, and the other cards' labels decremented 9→1 across 10 real UI unlocks; the 11th button flipped to 'Unlock full CV · ₹49' and its toast was 'CV unlocked! (₹49 paid — demo)'. (2) WhatsApp prefilled template on unlocked cards — intercepted window.open: 'Hi Rajesh Nair, we found your profile on Smart Crewing for a Chief Engineer position.\\nCan you share your CV on my email ID (gyanindramishra@gmail.com) or here on WhatsApp?\\nRegards\\nDemo ' — email + company name come from the logged-in company's own requirement. (3) Saved Searches parity — result unlock button showed 'Unlock CV · ₹49' after quota exhaustion, unlock worked, and result-wa-<id> produced the identical template. (4) Regression — match-alerts row, '2 new matches since your last visit' banner, green match-reasons tags and provider match grid all render. Backend intentionally not retested.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Dashboard stat cards", "issue": "'CVs Unlocked' stat stayed at 0 through 11 unlocks in the same session; only correct (11) after a page reload. Stat cards are not refreshed after unlock actions.", "selector": "Dashboard.jsx StatCard 'CVs Unlocked'", "priority": "LOW"},
+      {"component": "SavedSearches unlock toast", "issue": "Paid toast reads 'CV unlocked! (₹49 — demo)' while Matches.jsx (and the spec) uses 'CV unlocked! (₹49 paid — demo)'. Also label copy differs: 'Unlock CV · ₹49' vs 'Unlock full CV · ₹49'.", "selector": "[data-testid^=result-unlock-]", "priority": "LOW"},
+      {"component": "waMessage / requirement data", "issue": "Company name is stored with a trailing space ('Demo '), so the WhatsApp message ends 'Regards\\nDemo ' (trailing whitespace). Suggest trimming companyEmail/companyName in buildContactMessage.", "selector": "src/lib/waMessage.js", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/tests/check_state.py"],
+  "action_items": [
+    "Align SavedSearches paid toast text with Matches: 'CV unlocked! (₹49 paid — demo)' and label 'Unlock full CV · ₹49'.",
+    "Refresh Dashboard overview stats (CVs Unlocked / Payments) after an unlock, or expose a lightweight refetch.",
+    "Trim companyName/companyEmail in buildContactMessage so the message doesn't end with stray whitespace."
+  ],
+  "critical_code_review_comments": [
+    "waLink is redefined locally in both Matches.jsx and SavedSearches.jsx even though src/lib/waMessage.js exports it — DRY violation, import the shared helper.",
+    "SavedSearches initialises freeLeft=0, so if /saved-searches/{id}/results ever fails the label silently falls back to '₹49' — prefer null + disabled state."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested", "frontend": "100% of requested flows passed (3 low-severity copy/stale-stat nits)"},
+  "seed_data_creation": "Consumed the company's 10 free unlocks plus 2 paid (₹49) unlocks on 9930867220 — unlocks now 12. Reset db.unlocks for user 42a54995-f739-4493-90e2-5b097c5a26ef to re-demo the free quota. Helper: /app/tests/check_state.py prints user/provider/unlock counts.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Company 9930867220 (country IN) / OTP 123456; email gyanindramishra@gmail.com, company_name 'Demo '",
+  "context_for_next_testing_agent": "Login recipe still valid: select_option('IN') on [data-testid=login-phone] select, then press_sequentially digits into login-phone-number. Free quota for 9930867220 is now EXHAUSTED (12 unlocks) — reset db.unlocks before re-testing the free-label path. window.open interception works for reading wa.me URLs.",
+  "rca_of_the_issue": "N/A — both new rules behave as specified in the UI. Remaining findings are copy inconsistency in SavedSearches toast/label, stale dashboard stat cards (data loaded once on mount), and a trailing space in the stored company_name leaking into the WhatsApp message."
+}

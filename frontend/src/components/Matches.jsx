@@ -6,11 +6,7 @@ import { api } from "@/lib/api";
 import { Empty } from "@/pages/Dashboard";
 import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift, Lightbulb } from "lucide-react";
 import { MatchAlerts } from "@/components/MatchAlerts";
-
-const waLink = (mobile, text) => {
-  const digits = String(mobile || "").replace(/[^\d]/g, "");
-  return `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
-};
+import { buildContactMessage, waLink } from "@/lib/waMessage";
 
 const Field = ({ label, value, tag }) => (
   <div>
@@ -191,7 +187,7 @@ const EligibilityGate = ({ referralCode, onEligible }) => {
   );
 };
 
-export const Matches = ({ browse = false }) => {
+export const Matches = ({ browse = false, onChange }) => {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(null);
 
@@ -201,9 +197,10 @@ export const Matches = ({ browse = false }) => {
   const unlock = async (id) => {
     setBusy(id);
     try {
-      await api.post("/unlock-cv", { seeker_id: id });
-      toast.success("CV unlocked! (₹49 paid — demo)");
+      const r = await api.post("/unlock-cv", { seeker_id: id });
+      toast.success(r.data.amount ? "CV unlocked! (₹49 paid — demo)" : "CV unlocked — free!");
       load();
+      onChange?.();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Unlock failed");
     } finally {
@@ -279,7 +276,7 @@ export const Matches = ({ browse = false }) => {
                 </Button>
                 <Button
                   className="flex-1 bg-[#25D366] hover:bg-[#1da851] text-black font-semibold gap-2 rounded-full"
-                  onClick={() => window.open(waLink(c.mobile, `Hi ${c.name}, we found your profile on Smart Crewing for a ${c.rank} position.`), "_blank")}
+                  onClick={() => window.open(waLink(c.mobile, buildContactMessage({ crewName: c.name, position: c.rank, companyEmail: res.requirement?.email, companyName: res.requirement?.company_name })), "_blank")}
                   data-testid={`whatsapp-${c.id}`}
                 >
                   <MessageCircle className="w-4 h-4" /> WhatsApp
@@ -292,7 +289,8 @@ export const Matches = ({ browse = false }) => {
                 onClick={() => unlock(c.id)}
                 data-testid={`unlock-btn-${c.id}`}
               >
-                <IndianRupee className="w-4 h-4" /> {busy === c.id ? "Processing..." : "Unlock full CV · ₹49"}
+                {res.free_unlocks_left > 0 ? <Unlock className="w-4 h-4" /> : <IndianRupee className="w-4 h-4" />}
+                {busy === c.id ? "Processing..." : (res.free_unlocks_left > 0 ? `Unlock free · ${res.free_unlocks_left} left` : "Unlock full CV · ₹49")}
               </Button>
             )}
           </div>

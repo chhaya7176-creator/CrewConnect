@@ -112,14 +112,14 @@ export default function Dashboard() {
           </TabsList>
 
           <TabsContent value="matches" className="mt-6">
-            <Matches />
+            <Matches onChange={loadDashboard} />
           </TabsContent>
           <TabsContent value="browse" className="mt-6">
-            <Matches browse />
+            <Matches browse onChange={loadDashboard} />
           </TabsContent>
           {providerReq && (
             <TabsContent value="saved" className="mt-6">
-              <SavedSearches />
+              <SavedSearches onChange={loadDashboard} />
             </TabsContent>
           )}
           <TabsContent value="posts" className="mt-6">

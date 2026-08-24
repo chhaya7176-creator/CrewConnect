@@ -33,12 +33,13 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Tested: 15/15 backend pass, 100% frontend E2E pass.
 
 ## Fixes (2026-06)
-- **Match Alerts**: WhatsApp opt-in toggle on the Matches tab (crew + companies) + "N new matches since your last visit" banner with a Notify-on-WhatsApp deep link (SIMULATED — wa.me, no automated send) and Mark-seen. Endpoints: GET/POST `/api/alerts/*`, POST `/api/matches/mark-seen`; `GET /api/matches` returns `new_matches`. Files: `components/MatchAlerts.jsx`.
-- **Save Filters (companies)**: "Saved Searches" dashboard tab (providers only) — save current requirement as a search, view matching crew newest-first with NEW tags + per-search "N new" badge, unlock (₹49 demo) / WhatsApp / delete. Endpoints: `/api/saved-searches` (POST/GET/DELETE) + `/api/saved-searches/{id}/results`. Files: `components/SavedSearches.jsx`, `pages/Dashboard.jsx`.
-- **Smart phone input**: International field (react-phone-number-input) in chat + login. Auto-detects country/dial-code from IP (ipapi.co, 2s abort → fallback +91), renders immediately (never blocks sign-in), emits E.164.
-- **"Why matched" tags** + de-duplicated **empty-match nudge** (near_matches) on the Matches tab.
-- **Mobile normalization** (`mobile_key` = last 10 digits, `to_e164` for display) — same phone with/without +91 resolves to one account; fixed "posts/matches not showing".
-- `/api/browse` role isolation confirmed working.
+- **Free unlocks + paid tier**: A company's first **10 crew-contact unlocks are FREE**, then **₹49** each (mocked). `POST /api/unlock-cv` returns `{amount, free, free_unlocks_left}`; `/api/matches`, `/api/browse`, `/api/saved-searches/{id}/results` return `free_unlocks_left`. UI button reads "Unlock free · N left" then "Unlock full CV · ₹49". Verified boundary via curl (10×0 then 49).
+- **WhatsApp contact template**: Company→crew WhatsApp opens prefilled: "Hi <Crew>, we found your profile on Smart Crewing for a <rank> position. / Can you share your CV on my email ID (<company email>) or here on WhatsApp? / Regards / <company name>". Company email+name pulled from the logged-in company's own requirement (`res.requirement`). Shared helper `lib/waMessage.js`.
+- **Match Alerts**: WhatsApp opt-in toggle + new-match banner (simulated wa.me deep-link, no automated send).
+- **Save Filters (companies)**: "Saved Searches" tab — save requirement, view matching crew newest-first with NEW tags + "N new" badge.
+- **Smart phone input**: auto country/dial-code detection (ipapi.co, 2s abort → +91), renders immediately, E.164.
+- **"Why matched" tags** + de-duplicated empty-match nudge.
+- **Mobile normalization** (last-10-digit key) — one phone = one account.
 
 ## Backlog / Remaining
 - P1: Real SMS OTP (Twilio) and real payments (Stripe/Razorpay) for production

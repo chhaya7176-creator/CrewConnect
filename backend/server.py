@@ -479,6 +479,7 @@ async def get_matches(user=Depends(get_current_user)):
                               "match_reasons": matched_labels(s, provider)} for s in matched]
         result["near_matches"] = [{**redact_seeker(s, False),
                                    "gaps": gap_labels(s, provider)} for s in near[:6]]
+        result["free_unlocks_left"] = max(0, FREE_UNLOCKS - len(unlocks))
         result["requirement"] = provider
     elif seeker:
         result["role"] = "seeker"
@@ -581,7 +582,7 @@ async def saved_search_results(sid: str, user=Depends(get_current_user)):
                 "match_reasons": matched_labels(k, req),
                 "is_new": (k.get("created_at") or "") > seen_at} for k in matched]
     await db.saved_searches.update_one({"id": sid}, {"$set": {"last_viewed_at": datetime.now(timezone.utc).isoformat()}})
-    return {"search": s, "results": results}
+    return {"search": s, "results": results, "free_unlocks_left": max(0, FREE_UNLOCKS - len(unlocks))}
 
 
 @api_router.delete("/saved-searches/{sid}")
@@ -604,6 +605,8 @@ async def browse_all(user=Depends(get_current_user)):
         seekers = await db.seekers.find({}, {"_id": 0}).to_list(2000)
         seekers.sort(key=lambda s: (not s.get("boosted", False), s.get("created_at", "")))
         result["matches"] = [redact_seeker(s, s["id"] in unlocked_ids) for s in seekers]
+        result["free_unlocks_left"] = max(0, FREE_UNLOCKS - len(unlocks))
+        result["requirement"] = provider
     else:
         result["role"] = "seeker"
         elig = is_eligible(user)
@@ -617,19 +620,31 @@ class UnlockRequest(BaseModel):
     seeker_id: str
 
 
+FREE_UNLOCKS = 10  # first 10 crew contacts free per company, then ₹49
+
+
 @api_router.post("/unlock-cv")
 async def unlock_cv(req: UnlockRequest, user=Depends(get_current_user)):
     seeker = await db.seekers.find_one({"id": req.seeker_id}, {"_id": 0})
     if not seeker:
         raise HTTPException(status_code=404, detail="Profile not found")
-    # mock payment of ₹49
+    existing = await db.unlocks.find_one({"user_id": user["id"], "seeker_id": req.seeker_id}, {"_id": 0})
+    if existing:
+        used = await db.unlocks.count_documents({"user_id": user["id"]})
+        return {"success": True, "amount": existing.get("amount", 0), "already": True,
+                "free_unlocks_left": max(0, FREE_UNLOCKS - used), "cv": redact_seeker(seeker, True)}
+    used = await db.unlocks.count_documents({"user_id": user["id"]})
+    amount = 0 if used < FREE_UNLOCKS else 49  # first 10 free, then mock ₹49
+    now = datetime.now(timezone.utc).isoformat()
     await db.unlocks.update_one(
         {"user_id": user["id"], "seeker_id": req.seeker_id},
-        {"$set": {"user_id": user["id"], "seeker_id": req.seeker_id,
-                  "amount": 49, "at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": {"user_id": user["id"], "seeker_id": req.seeker_id, "amount": amount, "at": now}},
         upsert=True,
     )
-    return {"success": True, "amount": 49, "cv": redact_seeker(seeker, True)}
+    if amount:
+        await db.payments.insert_one({"user_id": user["id"], "type": "cv_unlock", "amount": amount, "at": now})
+    return {"success": True, "amount": amount, "free": amount == 0,
+            "free_unlocks_left": max(0, FREE_UNLOCKS - (used + 1)), "cv": redact_seeker(seeker, True)}
 
 
 @api_router.post("/boost-profile")
