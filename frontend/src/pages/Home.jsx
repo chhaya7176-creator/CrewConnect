@@ -4,7 +4,7 @@ import { LoginDialog } from "@/components/LoginDialog";
 import { ChatFlow } from "@/components/ChatFlow";
 import { ShieldCheck, Zap, IndianRupee, Users, TrendingUp, FileCheck2 } from "lucide-react";
 
-const SEA_BG = "https://static.prod-images.emergentagent.com/jobs/73dfd5f5-2c66-45fa-b175-89ba7a0303b2/images/e62d5c49f26a3b43b6dfc45af3987d1d02fe614561838c0798821e241416076a.jpeg";
+const SEA_BG = "https://static.prod-images.emergentagent.com/jobs/73dfd5f5-2c66-45fa-b175-89ba7a0303b2/images/07a6b47f6021204a8f54a17e0c6c17007f53b73bc1e2e2a5f074a57c776d0174.jpeg";
 
 const STATS = [
   { label: "Active Seafarers", value: "12,400+", icon: Users },
