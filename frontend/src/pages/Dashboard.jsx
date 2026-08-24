@@ -6,13 +6,14 @@ import { Matches } from "@/components/Matches";
 import { Documents } from "@/components/Documents";
 import { StandardCV } from "@/components/StandardCV";
 import { Movement } from "@/components/Movement";
+import { SavedSearches } from "@/components/SavedSearches";
 import { FeedbackCard } from "@/components/FeedbackCard";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList } from "lucide-react";
+import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList, Bookmark } from "lucide-react";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -101,6 +102,7 @@ export default function Dashboard() {
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">
             <TabTrig value="matches" icon={Users}>Matches</TabTrig>
             <TabTrig value="browse" icon={Globe}>{providerReq ? "All Crew" : "All Vacancies"}</TabTrig>
+            {providerReq && <TabTrig value="saved" icon={Bookmark}>Saved Searches</TabTrig>}
             <TabTrig value="posts" icon={ClipboardList}>My Posts</TabTrig>
             <TabTrig value="documents" icon={FileText}>Documents</TabTrig>
             <TabTrig value="cv" icon={FileScan}>Standard CV</TabTrig>
@@ -115,6 +117,11 @@ export default function Dashboard() {
           <TabsContent value="browse" className="mt-6">
             <Matches browse />
           </TabsContent>
+          {providerReq && (
+            <TabsContent value="saved" className="mt-6">
+              <SavedSearches />
+            </TabsContent>
+          )}
           <TabsContent value="posts" className="mt-6">
             <MyPosts data={data} />
           </TabsContent>

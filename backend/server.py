@@ -175,11 +175,34 @@ class FeedbackIn(BaseModel):
     message: str
 
 
+class AlertOptIn(BaseModel):
+    enabled: bool
+    whatsapp: Optional[str] = ""
+
+
+class SavedSearchIn(BaseModel):
+    name: str
+    criteria: dict
+
+
 # ---------------- Auth helpers ----------------
 def mobile_key(m: str) -> str:
     """Canonical identity for a phone number: last 10 digits (ignores +, spaces, country code)."""
     digits = "".join(c for c in (m or "") if c.isdigit())
     return digits[-10:] if len(digits) >= 10 else digits
+
+
+def to_e164(m: str) -> str:
+    """Best-effort E.164 for display in the phone field (India-first, keeps existing '+')."""
+    m = (m or "").strip()
+    if m.startswith("+"):
+        return m
+    digits = "".join(c for c in m if c.isdigit())
+    if not digits:
+        return ""
+    if len(digits) == 10:
+        return "+91" + digits
+    return "+" + digits
 
 
 def create_token(user_id: str, mobile: str) -> str:
@@ -450,6 +473,8 @@ async def get_matches(user=Depends(get_current_user)):
                 near.append(s)
         matched.sort(key=lambda s: (not s.get("boosted", False), s.get("created_at", "")), reverse=False)
         near = dedup_by(near, ["rank", "vessel_type", "sea_time", "coc", "us_visa"])
+        seen_at = user.get("matches_seen_at") or user.get("created_at") or ""
+        result["new_matches"] = sum(1 for s in matched if (s.get("created_at") or "") > seen_at)
         result["matches"] = [{**redact_seeker(s, s["id"] in unlocked_ids),
                               "match_reasons": matched_labels(s, provider)} for s in matched]
         result["near_matches"] = [{**redact_seeker(s, False),
@@ -466,6 +491,8 @@ async def get_matches(user=Depends(get_current_user)):
                 matched.append(p)
             elif p["rank"] == seeker["rank"]:
                 near.append(p)
+        seen_at = user.get("matches_seen_at") or user.get("created_at") or ""
+        result["new_matches"] = sum(1 for p in matched if (p.get("created_at") or "") > seen_at)
         result["matches"] = [{**provider_card(p, elig),
                               "match_reasons": matched_labels(seeker, p)} for p in matched]
         near = dedup_by(near, ["company_name", "rank", "vessel_type", "sea_time"])
@@ -473,6 +500,94 @@ async def get_matches(user=Depends(get_current_user)):
                                    "gaps": gap_labels(seeker, p)} for p in near[:6]]
         result["profile"] = seeker
     return result
+
+
+@api_router.post("/matches/mark-seen")
+async def mark_matches_seen(user=Depends(get_current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$set": {"matches_seen_at": datetime.now(timezone.utc).isoformat()}})
+    return {"ok": True}
+
+
+@api_router.get("/alerts/status")
+async def alerts_status(user=Depends(get_current_user)):
+    return {"enabled": bool(user.get("alert_optin")), "whatsapp": to_e164(user.get("alert_whatsapp") or user.get("mobile", ""))}
+
+
+@api_router.post("/alerts/optin")
+async def alerts_optin(body: AlertOptIn, user=Depends(get_current_user)):
+    wa = to_e164(body.whatsapp or user.get("mobile", ""))
+    await db.users.update_one({"id": user["id"]}, {"$set": {"alert_optin": body.enabled, "alert_whatsapp": wa}})
+    return {"ok": True, "enabled": body.enabled, "whatsapp": wa}
+
+
+# ---------------- Saved searches (companies) ----------------
+def _search_req(criteria: dict) -> dict:
+    return {
+        "rank": criteria.get("rank"),
+        "vessel_type": criteria.get("vessel_type", "Any"),
+        "sea_time": criteria.get("sea_time", "0–9 months"),
+        "sea_time_priority": criteria.get("sea_time_priority", "Mandatory"),
+        "coc": criteria.get("coc", ["Any"]) or ["Any"],
+        "coc_priority": criteria.get("coc_priority", "Mandatory"),
+    }
+
+
+@api_router.post("/saved-searches")
+async def create_saved_search(body: SavedSearchIn, user=Depends(get_current_user)):
+    provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not provider:
+        raise HTTPException(status_code=403, detail="Only companies can save searches")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": body.name or body.criteria.get("rank", "Search"),
+        "criteria": body.criteria,
+        "created_at": now,
+        "last_viewed_at": now,
+    }
+    await db.saved_searches.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.get("/saved-searches")
+async def list_saved_searches(user=Depends(get_current_user)):
+    searches = await db.saved_searches.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    seekers = await db.seekers.find({}, {"_id": 0}).to_list(1000)
+    out = []
+    for s in searches:
+        req = _search_req(s["criteria"])
+        matched = [k for k in seekers if matches_requirement(k, req)]
+        seen_at = s.get("last_viewed_at") or ""
+        out.append({**s, "count": len(matched),
+                    "new_count": sum(1 for k in matched if (k.get("created_at") or "") > seen_at)})
+    return {"searches": out}
+
+
+@api_router.get("/saved-searches/{sid}/results")
+async def saved_search_results(sid: str, user=Depends(get_current_user)):
+    s = await db.saved_searches.find_one({"id": sid, "user_id": user["id"]}, {"_id": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Search not found")
+    unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
+    unlocked_ids = {u["seeker_id"] for u in unlocks}
+    req = _search_req(s["criteria"])
+    seekers = await db.seekers.find({}, {"_id": 0}).to_list(1000)
+    matched = [k for k in seekers if matches_requirement(k, req)]
+    matched.sort(key=lambda k: k.get("created_at", ""), reverse=True)  # newest first
+    seen_at = s.get("last_viewed_at") or ""
+    results = [{**redact_seeker(k, k["id"] in unlocked_ids),
+                "match_reasons": matched_labels(k, req),
+                "is_new": (k.get("created_at") or "") > seen_at} for k in matched]
+    await db.saved_searches.update_one({"id": sid}, {"$set": {"last_viewed_at": datetime.now(timezone.utc).isoformat()}})
+    return {"search": s, "results": results}
+
+
+@api_router.delete("/saved-searches/{sid}")
+async def delete_saved_search(sid: str, user=Depends(get_current_user)):
+    await db.saved_searches.delete_one({"id": sid, "user_id": user["id"]})
+    return {"ok": True}
 
 
 @api_router.get("/browse")

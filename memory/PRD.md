@@ -33,11 +33,12 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Tested: 15/15 backend pass, 100% frontend E2E pass.
 
 ## Fixes (2026-06)
-- **Smart phone input**: International phone field (react-phone-number-input) in chat flow + login dialog. Auto-detects the user's country/dial-code from IP (ipapi.co, 2s abort → fallback India +91), auto-prefixes it, user can change country manually. Renders immediately (never blocks sign-in on a slow geolocation lookup); emits E.164. Files: `components/PhoneField.jsx`, `lib/detectCountry.js`.
-- **"Why matched" tags**: `GET /api/matches` returns `match_reasons` per matched card (Rank/Vessel/Sea time/COC ✓ shown as green tags in `Matches.jsx`).
-- **Empty-match nudge**: `GET /api/matches` returns de-duplicated `near_matches` (same-rank, failing other criteria). UI shows a yellow tip banner + near-miss cards with red ✗ gap tags when there are no exact matches.
-- **Mobile normalization** (`mobile_key` = last 10 digits) in request-otp/verify-otp + startup backfill of legacy users. Root cause of "posted requirement/profile not showing in dashboard/My Posts + no matches": mobile was matched as an exact string, so the same phone with vs without `+91` created two separate accounts. Verified: bare / `+91` / spaced formats all resolve to one uid with identical posts & matches.
-- `/api/browse` role isolation confirmed working (Company sees only Crew, Crew sees only Vacancies).
+- **Match Alerts**: WhatsApp opt-in toggle on the Matches tab (crew + companies) + "N new matches since your last visit" banner with a Notify-on-WhatsApp deep link (SIMULATED — wa.me, no automated send) and Mark-seen. Endpoints: GET/POST `/api/alerts/*`, POST `/api/matches/mark-seen`; `GET /api/matches` returns `new_matches`. Files: `components/MatchAlerts.jsx`.
+- **Save Filters (companies)**: "Saved Searches" dashboard tab (providers only) — save current requirement as a search, view matching crew newest-first with NEW tags + per-search "N new" badge, unlock (₹49 demo) / WhatsApp / delete. Endpoints: `/api/saved-searches` (POST/GET/DELETE) + `/api/saved-searches/{id}/results`. Files: `components/SavedSearches.jsx`, `pages/Dashboard.jsx`.
+- **Smart phone input**: International field (react-phone-number-input) in chat + login. Auto-detects country/dial-code from IP (ipapi.co, 2s abort → fallback +91), renders immediately (never blocks sign-in), emits E.164.
+- **"Why matched" tags** + de-duplicated **empty-match nudge** (near_matches) on the Matches tab.
+- **Mobile normalization** (`mobile_key` = last 10 digits, `to_e164` for display) — same phone with/without +91 resolves to one account; fixed "posts/matches not showing".
+- `/api/browse` role isolation confirmed working.
 
 ## Backlog / Remaining
 - P1: Real SMS OTP (Twilio) and real payments (Stripe/Razorpay) for production

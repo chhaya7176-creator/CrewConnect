@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend-only E2E testing of the two new features (Match Alerts + Saved Searches) plus listed regressions on the Smart Crewing dashboard via the public preview URL. Company account 9930867220 and seeker +919746835595 were exercised with real OTP login (123456). All 6 requested test areas PASSED: alert opt-in ON/OFF with persistence across reload, new-matches banner + Notify-on-WhatsApp deep link + Mark seen (banner disappears, count resets), alerts row present for seekers with 'vacancies' wording and absent on the Browse tab, Saved Searches tab visible only for companies, save/view/unlock(₹49 demo)/hide/delete of a saved search, NEW tag + 'N new' badge (verified by backdating last_viewed_at) and their reset after View, green match-reasons tags on match cards, near-matches nudge for the empty-match seeker, and phone country-code auto-prefix in the login dialog. No console errors, no failed API calls observed. Only minor cosmetic/UX gaps found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Saved Searches → expanded results", "issues": [
+        "Result cards do not render the green 'why matched' reason tags even though GET /api/saved-searches/{id}/results returns match_reasons — inconsistent with the Matches tab cards.",
+        "Locked result cards show no blurred name/contact block or 'hidden until unlocked' hint (Matches tab does), so the value of the ₹49 unlock is less obvious.",
+        "Delete (del-search-<id>) is an unlabeled trash icon with no confirmation step and no aria-label/tooltip — accidental deletion is one click away."
+      ]},
+      {"screen": "Matches → WhatsApp match alerts row (OFF state)", "issues": [
+        "The switch in the OFF state is dark-grey on the near-black #0A0B12 row (very low contrast); it reads as a decorative element rather than an interactive toggle. Consider a visible border/track colour."
+      ]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/reset_alerts_state.py",
+    "/app/backend/tests/seed_saved_search_new.py"
+  ],
+  "action_items": [
+    "Optional polish only: render match_reasons on saved-search result cards, add locked-contact hint on those cards, add a confirm/aria-label to the saved-search delete button, and raise contrast of the OFF-state alert switch.",
+    "Minor robustness: GET /api/alerts/status falls back to user.mobile which is stored without a leading '+' (e.g. '9930867220'); react-phone-number-input cannot render a non-E.164 value, so a first-time user opting in may see an empty phone field. Normalise the fallback to E.164 before returning."
+  ],
+  "critical_code_review_comments": [
+    "MatchAlerts.markSeen() swallows all errors silently (catch { /* noop */ }) — a failed POST /api/matches/mark-seen leaves the banner up with no user feedback; surface a toast.",
+    "SavedSearches.view()/unlock() call api.get without try/catch — a 404/500 on /saved-searches/{id}/results would produce an unhandled promise rejection and an empty panel with no error state.",
+    "SavedSearches allows saving the same requirement repeatedly (no duplicate-name/criteria guard), so the list can fill with identical rows."
+  ],
+  "updated_files": [
+    "/app/backend/tests/reset_alerts_state.py",
+    "/app/backend/tests/seed_saved_search_new.py"
+  ],
+  "success_rate": {"backend": "not tested (per request)", "frontend": "100% (6/6 requested flows passed)"},
+  "seed_data_creation": "Reset company 9930867220 matches_seen_at to 2000-01-01 and alert_optin=false (via /app/backend/tests/reset_alerts_state.py) to re-expose the '2 new matches' banner and a clean toggle state. Created a temporary saved search 'TEST_new-badge' with backdated last_viewed_at to verify NEW tag/badge, then deleted it via the UI. One extra CV unlock (₹49 demo) was performed on candidate bc63b51a (CVs Unlocked count went 3 → 4). Company alert opt-in was left OFF and matches marked seen after testing; seeker alert opt-in reverted to OFF.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "OTP 123456; company +919930867220; seeker +919746835595",
+  "context_for_next_testing_agent": "Login recipe that works reliably: go to /dashboard (login dialog auto-opens), wait ~3s for PhoneField's detectCountry remount, then page.locator('[data-testid=login-phone] select').select_option('IN') and press_sequentially the 10 digits into [data-testid=login-phone-number]. Do NOT use fill('+9199...') — react-phone-number-input silently drops the programmatic value (input stays '+1') and Send OTP remains disabled. To re-test the new-matches banner, run /app/backend/tests/reset_alerts_state.py (backdates matches_seen_at). To re-test the NEW tag / 'N new' badge, run /app/backend/tests/seed_saved_search_new.py (creates a saved search with backdated last_viewed_at); both counters legitimately reset after Mark seen / View.",
+  "rca_of_the_issue": "No functional defects found. The initially-missing new-matches banner was only because a previous run had already marked matches seen; after backdating matches_seen_at the banner rendered '2 new matches since your last visit' and Mark seen correctly cleared it."
+}

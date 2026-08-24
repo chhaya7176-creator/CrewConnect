@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Empty } from "@/pages/Dashboard";
 import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift, Lightbulb } from "lucide-react";
+import { MatchAlerts } from "@/components/MatchAlerts";
 
 const waLink = (mobile, text) => {
   const digits = String(mobile || "").replace(/[^\d]/g, "");
@@ -213,14 +214,23 @@ export const Matches = ({ browse = false }) => {
   if (!res) return <Empty text="Loading matches..." />;
   if (!res.role) return <Empty text="Complete a profile or requirement in the chat to see your matches." />;
 
+  const alerts = !browse ? <MatchAlerts newCount={res.new_matches || 0} role={res.role} onSeen={load} /> : null;
+
   // Provider view — candidate CVs with locked identity/contact
   if (res.role === "provider") {
     if (!res.matches.length)
-      return res.near_matches?.length
-        ? <NearMatches items={res.near_matches} role="provider" />
-        : <Empty text="No matching candidates yet. Check back soon — new crew join daily." />;
+      return (
+        <>
+          {alerts}
+          {res.near_matches?.length
+            ? <NearMatches items={res.near_matches} role="provider" />
+            : <Empty text="No matching candidates yet. Check back soon — new crew join daily." />}
+        </>
+      );
     return (
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="matches-provider">
+      <>
+        {alerts}
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="matches-provider">
         {res.matches.map((c) => (
           <div key={c.id} className="rounded-xl border border-white/10 bg-[#0A0B12] p-5 flex flex-col" data-testid={`match-card-${c.id}`}>
             <div className="flex items-center justify-between mb-3">
@@ -287,7 +297,8 @@ export const Matches = ({ browse = false }) => {
             )}
           </div>
         ))}
-      </div>
+        </div>
+      </>
     );
   }
 
@@ -295,6 +306,7 @@ export const Matches = ({ browse = false }) => {
   const eligible = res.eligible;
   return (
     <div data-testid="matches-seeker">
+      {alerts}
       {!eligible && <EligibilityGate referralCode={res.profile?.referral_code} onEligible={load} />}
       {eligible && (
         <div className="mb-6 flex items-center gap-2 text-sm text-[#25D366] rounded-xl border border-[#25D366]/30 bg-[#25D366]/5 px-4 py-3" data-testid="eligible-banner">
