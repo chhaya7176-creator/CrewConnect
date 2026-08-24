@@ -1,5 +1,6 @@
 export const waLink = (mobile, text) => {
-  const digits = String(mobile || "").replace(/[^\d]/g, "");
+  let digits = String(mobile || "").replace(/[^\d]/g, "");
+  if (digits.length === 10) digits = "91" + digits; // assume India when country code missing
   return `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
 };
 
