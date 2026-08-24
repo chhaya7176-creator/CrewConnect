@@ -1,0 +1,51 @@
+.mc-phone .PhoneInput {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 42px;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.mc-phone .PhoneInput--focus,
+.mc-phone .PhoneInput:focus-within {
+  box-shadow: 0 0 0 2px #ff5a00;
+  border-color: transparent;
+}
+
+.mc-phone .PhoneInputInput {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f3f4f6;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 14px;
+  width: 100%;
+}
+
+.mc-phone .PhoneInputInput::placeholder {
+  color: #8a8f9e;
+}
+
+.mc-phone .PhoneInputCountry {
+  margin-right: 2px;
+}
+
+.mc-phone .PhoneInputCountryIcon {
+  width: 24px;
+  height: 18px;
+  box-shadow: none;
+}
+
+.mc-phone .PhoneInputCountrySelectArrow {
+  color: #8a8f9e;
+  opacity: 0.9;
+}
+
+/* native dropdown list renders with OS styling; keep text dark for readability */
+.mc-phone .PhoneInputCountrySelect option {
+  color: #000;
+}

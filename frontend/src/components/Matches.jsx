@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Empty } from "@/pages/Dashboard";
-import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift } from "lucide-react";
+import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift, Lightbulb } from "lucide-react";
 
 const waLink = (mobile, text) => {
   const digits = String(mobile || "").replace(/[^\d]/g, "");
@@ -24,6 +24,68 @@ const Field = ({ label, value, tag }) => (
     <div className="text-sm font-data mt-0.5">{value}</div>
   </div>
 );
+
+const ReasonTags = ({ reasons }) =>
+  reasons?.length ? (
+    <div className="flex flex-wrap gap-1.5 mb-3" data-testid="match-reasons">
+      {reasons.map((r) => (
+        <span key={r} className="text-[10px] px-2 py-0.5 rounded-full bg-[#25D366]/15 text-[#25D366] border border-[#25D366]/30 font-medium">
+          {r} ✓
+        </span>
+      ))}
+    </div>
+  ) : null;
+
+const GapTags = ({ gaps }) =>
+  gaps?.length ? (
+    <div className="flex flex-wrap gap-1.5" data-testid="match-gaps">
+      {gaps.map((g) => (
+        <span key={g} className="text-[10px] px-2 py-0.5 rounded-full bg-[#ef4444]/15 text-[#ff6b6b] border border-[#ef4444]/30 font-medium">
+          {g} ✗
+        </span>
+      ))}
+    </div>
+  ) : null;
+
+const NearMatches = ({ items, role }) => {
+  if (!items?.length) return null;
+  const isProvider = role === "provider";
+  return (
+    <div data-testid="near-matches">
+      <div className="rounded-xl border border-[#DFFF00]/30 bg-[#DFFF00]/5 px-4 py-3 mb-5 text-sm text-[#DFFF00] flex items-start gap-2.5" data-testid="near-matches-nudge">
+        <Lightbulb className="w-4 h-4 mt-0.5 shrink-0" />
+        <span>
+          No exact matches yet. Try lowering the minimum sea time or broadening acceptable COC countries.
+          Here are the closest {isProvider ? "candidates" : "vacancies"}:
+        </span>
+      </div>
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {items.map((it) => (
+          <div key={it.id} className="rounded-xl border border-white/10 bg-[#0A0B12] p-5" data-testid={`near-card-${it.id}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-9 h-9 rounded-lg bg-[#12131A] border border-white/10 flex items-center justify-center">
+                {isProvider ? <Anchor className="w-4 h-4 text-[#FF5A00]" /> : <Building2 className="w-4 h-4 text-[#0066FF]" />}
+              </div>
+              <div>
+                <div className="font-heading font-bold leading-tight">{isProvider ? it.rank : it.company_name}</div>
+                {!isProvider && <div className="text-xs text-[#8A8F9E]">{it.rank}</div>}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <Field label="Vessel" value={it.vessel_type} />
+              <Field label="Sea time" value={it.sea_time} />
+              <Field label="COC" value={Array.isArray(it.coc) ? it.coc.join(", ") : it.coc} />
+              <Field label="US Visa" value={it.us_visa} />
+              <Field label="Available" value={it.availability} />
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-[#8A8F9E] mb-1.5">Doesn't match on</div>
+            <GapTags gaps={it.gaps} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const EligibilityGate = ({ referralCode, onEligible }) => {
   const [elig, setElig] = useState(null);
@@ -153,7 +215,10 @@ export const Matches = ({ browse = false }) => {
 
   // Provider view — candidate CVs with locked identity/contact
   if (res.role === "provider") {
-    if (!res.matches.length) return <Empty text="No matching candidates yet. Check back soon — new crew join daily." />;
+    if (!res.matches.length)
+      return res.near_matches?.length
+        ? <NearMatches items={res.near_matches} role="provider" />
+        : <Empty text="No matching candidates yet. Check back soon — new crew join daily." />;
     return (
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="matches-provider">
         {res.matches.map((c) => (
@@ -169,6 +234,8 @@ export const Matches = ({ browse = false }) => {
             </div>
 
             {c.summary && <p className="text-xs text-[#8A8F9E] mb-4">{c.summary}</p>}
+
+            <ReasonTags reasons={c.match_reasons} />
 
             <div className="grid grid-cols-2 gap-3 mb-4">
               <Field label="Vessel" value={c.vessel_type} />
@@ -235,7 +302,9 @@ export const Matches = ({ browse = false }) => {
         </div>
       )}
       {!res.matches.length ? (
-        <Empty text="No matching vacancies yet. Check back soon — new jobs are posted daily." />
+        res.near_matches?.length
+          ? <NearMatches items={res.near_matches} role="seeker" />
+          : <Empty text="No matching vacancies yet. Check back soon — new jobs are posted daily." />
       ) : (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {res.matches.map((p) => (
@@ -250,6 +319,7 @@ export const Matches = ({ browse = false }) => {
                 </div>
               </div>
               {p.summary && <p className="text-xs text-[#8A8F9E] mb-4">{p.summary}</p>}
+              <ReasonTags reasons={p.match_reasons} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Vessel" value={p.vessel_type} />
                 <Field label="Min. sea time" value={p.sea_time} tag={p.sea_time_priority} />

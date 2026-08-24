@@ -33,7 +33,10 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Tested: 15/15 backend pass, 100% frontend E2E pass.
 
 ## Fixes (2026-06)
-- **Mobile normalization** (`mobile_key` = last 10 digits) in request-otp/verify-otp + startup backfill of legacy users. Root cause of "posted requirement/profile not showing in dashboard/My Posts + no matches": the chat flow and login dialog matched mobile as an exact string, so the same phone typed with vs without `+91` created two separate user accounts. Verified: bare / `+91` / spaced formats all resolve to one uid with identical posts & matches.
+- **Smart phone input**: International phone field (react-phone-number-input) in chat flow + login dialog. Auto-detects the user's country/dial-code from IP (ipapi.co, 2s abort → fallback India +91), auto-prefixes it, user can change country manually. Renders immediately (never blocks sign-in on a slow geolocation lookup); emits E.164. Files: `components/PhoneField.jsx`, `lib/detectCountry.js`.
+- **"Why matched" tags**: `GET /api/matches` returns `match_reasons` per matched card (Rank/Vessel/Sea time/COC ✓ shown as green tags in `Matches.jsx`).
+- **Empty-match nudge**: `GET /api/matches` returns de-duplicated `near_matches` (same-rank, failing other criteria). UI shows a yellow tip banner + near-miss cards with red ✗ gap tags when there are no exact matches.
+- **Mobile normalization** (`mobile_key` = last 10 digits) in request-otp/verify-otp + startup backfill of legacy users. Root cause of "posted requirement/profile not showing in dashboard/My Posts + no matches": mobile was matched as an exact string, so the same phone with vs without `+91` created two separate accounts. Verified: bare / `+91` / spaced formats all resolve to one uid with identical posts & matches.
 - `/api/browse` role isolation confirmed working (Company sees only Crew, Crew sees only Vacancies).
 
 ## Backlog / Remaining

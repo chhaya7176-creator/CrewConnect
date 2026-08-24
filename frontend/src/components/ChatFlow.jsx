@@ -10,12 +10,14 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2, Upload } from "lucide-react";
 import { formatDateInput } from "@/lib/formatDate";
+import { PhoneField } from "@/components/PhoneField";
+import { isValidPhoneNumber } from "react-phone-number-input";
 
 const uid = () => Math.random().toString(36).slice(2);
 
 const buildSeekerSteps = (cfg) => [
   { key: "rank", bot: "What is your professional rank?", type: "dropdown", options: cfg.ranks },
-  { key: "mobile", bot: "Enter your mobile number with country code for OTP verification.", type: "mobile", placeholder: "+91XXXXXXXXXX" },
+  { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
   { key: "cv_upload", bot: "Great! Please upload your CV / biodata now — PDF, Word or a photo (even handwritten). This saves your profile right away, even if you stop midway. You can also skip and upload it later.", type: "upload", optional: true },
   { key: "vessel_type", bot: "Which vessel type do you prefer to work on?", type: "dropdown", options: cfg.vessel_types },
@@ -37,7 +39,7 @@ const buildProviderSteps = (cfg) => [
   { key: "sea_time_priority", bot: "Is this experience duration Mandatory or Preferred?", type: "quick", options: ["Mandatory", "Preferred"] },
   { key: "coc", bot: "Which COC issuing countries/authorities are acceptable? Select all that apply — crew holding any of the following will be matched.", type: "multiselect", options: cfg.coc_provider },
   { key: "us_visa", bot: "US Visa requirement for this role?", type: "quick", options: cfg.us_visa_provider },
-  { key: "mobile", bot: "Enter your mobile number with country code for OTP verification.", type: "mobile", placeholder: "+91XXXXXXXXXX" },
+  { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
   { key: "consent", bot: "Do you agree to share your requirement with relevant seafarers?", type: "quick", options: ["Yes", "No"] },
   { key: "company_name", bot: "What is your company name?", type: "text", placeholder: "Company name" },
@@ -431,6 +433,28 @@ export const ChatFlow = () => {
     // text / mobile / otp
     const isOtp = step.type === "otp";
     const isMobile = step.type === "mobile";
+    if (isMobile) {
+      return (
+        <div className="flex gap-2" data-testid="chat-mobile">
+          <div className="flex-1">
+            <PhoneField
+              value={input}
+              onChange={setInput}
+              onEnter={() => { if (input) { handleValue(input); setInput(""); } }}
+              testId="chat-phone"
+            />
+          </div>
+          <Button
+            className="bg-[#FF5A00] hover:bg-[#E04F00] shrink-0"
+            disabled={!input || !isValidPhoneNumber(input)}
+            onClick={() => { handleValue(input); setInput(""); }}
+            data-testid="chat-send-btn"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="flex gap-2">
         <Input

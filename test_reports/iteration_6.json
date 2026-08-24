@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend-only round on the public preview URL covering (1) the new international PhoneField in the chat mobile step and login dialog, (2) mobile-number normalization regression, (3) 'why matched' green tick tags, (4) empty-match nudge + near-match cards with red gap tags. All four requested features WORK. Login dialog auto-opens on /dashboard when logged out; PhoneField auto-detects country from IP (this container resolves to US -> +1, cached in localStorage mc_country) and the country can be changed manually via the native select (verified switch to IN -> +91, input formats as '+91 99308 67220'). Company 9930867220 logged in with +91 prefix -> account 'ChhaGya', Matches tab shows 1 provider match card with match-reasons 'Rank ✓ Vessel ✓ Sea time ✓ COC ✓', My Posts shows 2 requirement cards. Repeated login with the US default (+1 9930867220) landed on the SAME account (ChhaGya, same 1 match + reasons, same 2 posts) -> last-10-digit normalization confirmed through the UI. Note: the PhoneField always forces a dial code, so a literal 'no country code' entry is no longer possible from the UI; the +1 variant is the equivalent regression proof. Empty-match nudge: found seeker +919746835595 (0 matches, 3 near) via a DB/API sweep script - Matches tab renders near-matches, near-matches-nudge yellow banner ('No exact matches yet...'), 3 near-card-* items each with match-gaps 'Vessel ✗'. Chat flow (Seafarer -> Captain / Master -> mobile) renders chat-phone with auto prefix, sends OTP, 123456 verifies, advances to CV step -> Skip -> Vessel type. Invalid short numbers are rejected in both chat ('Please enter a valid mobile number (10-15 digits...)') and login dialog (backend 'Mobile number must be 10-15 digits' toast).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PhoneField / detectCountry", "issue": "detectCountry() fetches https://ipapi.co/country/ with NO timeout and the component renders only a pulsing skeleton until it resolves. Simulated a hanging (blackholed) ipapi.co response: after 8s the login dialog still shows only [data-testid=login-phone-loading] and no phone input -> login is completely blocked. Many ISPs/corporate proxies blackhole rather than reject. Fix: render immediately with the fallback country and upgrade asynchronously, or wrap the fetch in AbortController with a ~1.5s timeout.", "selector": "[data-testid=login-phone-loading]", "priority": "HIGH"},
+      {"component": "ChatFlow mobile step", "issue": "After the bot rejects an invalid number, the PhoneField remounts and the country resets to the auto-detected one (US/+1), discarding the country the user had manually selected (IN). User must re-pick their country on every retry.", "selector": "[data-testid=chat-phone] select", "priority": "MEDIUM"},
+      {"component": "ChatFlow mobile step", "issue": "Send button (chat-send-btn) stays enabled for clearly incomplete numbers (e.g. +1 99308) with no inline hint; the error only appears as a bot bubble after submit. Minor UX.", "selector": "[data-testid=chat-send-btn]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Chat mobile step", "issues": ["Bot copy still says 'Enter your mobile number with country code' although the dial code is now auto-prefixed and the code portion is not editable - reword to 'Pick your country and enter your number'."]},
+      {"screen": "Dashboard header (company 9930867220)", "issues": ["Stat card reads 'Requirements: 4' but the My Posts tab renders only 2 cards. The stat sums seeker_profiles + provider_requirements while MyPosts shows requirements only when the account has any - a hybrid account (2 profiles + 2 requirements) silently hides its 2 seeker profiles. Pre-existing, but confusing."]},
+      {"screen": "Matches > near matches (seeker +919746835595)", "issues": ["The 3 near-cards are visually identical (Locked / Chief Officer / Bulk Carrier / 9-18 months / same COC) - duplicate seed vacancies make the nudge look buggy; consider de-duplicating near_matches."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/find_near_match_account.py"],
+  "action_items": [
+    "HIGH: add a timeout/abort (or render-then-upgrade) to detectCountry() so a slow/blackholed ipapi.co cannot block the phone input and therefore all login/signup.",
+    "MEDIUM: preserve the user's manually selected country across PhoneField remounts in ChatFlow (lift country state or key the component stably).",
+    "LOW: reword the chat mobile prompt; de-duplicate near_matches; reconcile the 'Requirements' stat with My Posts for hybrid accounts."
+  ],
+  "critical_code_review_comments": [
+    "PhoneField.jsx gates rendering on `ready`, which is only set after the network call settles - a single third-party outage becomes a total auth outage. Render the input with the fallback country immediately and setCountry when detection completes.",
+    "detectCountry caches the resolved country in localStorage forever (mc_country); a user who travels or was mis-geolocated keeps the wrong default until manual change - acceptable but consider a TTL.",
+    "ChatFlow mobile send button uses `disabled={!input}` only; react-phone-number-input emits partial E.164 for incomplete numbers, so validity should use isValidPhoneNumber() instead of truthiness."
+  ],
+  "updated_files": ["/app/backend/tests/find_near_match_account.py"],
+  "success_rate": {"backend": "not tested (frontend-only round)", "frontend": "100% of the 5 requested feature checks passed; 1 HIGH robustness bug + 2 minor UX bugs found"},
+  "seed_data_creation": "No new data intentionally seeded except OTP-only users created by chat runs (+919199001234 abandoned at vessel-type step, +9112345 rejected by validation).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "OTP 123456. Company 9930867220 (ChhaGya, 1 match + reasons, 2 posts). Seeker +919746835595 = 0 matches / 3 near matches (best account for the empty-match nudge). Other 0-match+near accounts: +919800012165, +919800052631, +919800031617 (providers).",
+  "context_for_next_testing_agent": "The test container's IP geolocates to US, so PhoneField defaults to +1 and localStorage mc_country='US'; use page.select_option('[data-testid=<id>] select','IN') to switch to India. /dashboard auto-opens the login dialog when logged out, so clicking nav-login-btn times out on the Radix overlay - just wait for [data-testid=login-dialog]. Chat testids: role-seeker-btn, chat-dropdown, opt-<label> ('Captain / Master'), chat-phone / chat-phone-number, chat-send-btn, chat-text-input, chat-upload, chat-cv-skip-btn. Use /app/backend/tests/find_near_match_account.py to re-find accounts with 0 matches + near matches (near cards only render when matches is empty).",
+  "rca_of_the_issue": "Login-blocking risk: PhoneField returns a skeleton until detectCountry() settles, and detectCountry uses fetch() without AbortController/timeout. Reproduced by routing **ipapi.co/** to a 60s hang with localStorage cleared - after 8s only login-phone-loading exists and the user cannot enter a number. A network error resolves fine (catch -> 'IN'); only a hanging response is fatal."
+}

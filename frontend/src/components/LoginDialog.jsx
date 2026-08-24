@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Smartphone, ShieldCheck } from "lucide-react";
+import { PhoneField } from "@/components/PhoneField";
+import { ShieldCheck } from "lucide-react";
 
 export const LoginDialog = ({ open, onOpenChange, onSuccess }) => {
   const { login } = useAuth();
@@ -59,17 +60,13 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }) => {
         {stage === "mobile" ? (
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label className="text-sm">Mobile number (with country code)</Label>
-              <div className="relative">
-                <Smartphone className="w-4 h-4 absolute left-3 top-3 text-[#8A8F9E]" />
-                <Input
-                  className="bg-black/30 border-white/10 pl-9 font-data focus:ring-2 focus:ring-[#FF5A00]"
-                  placeholder="+91XXXXXXXXXX"
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                  data-testid="login-mobile-input"
-                />
-              </div>
+              <Label className="text-sm">Mobile number</Label>
+              <PhoneField
+                value={mobile}
+                onChange={setMobile}
+                onEnter={() => { if (mobile && mobile.length >= 8) sendOtp(); }}
+                testId="login-phone"
+              />
             </div>
             <Button
               className="w-full bg-[#FF5A00] hover:bg-[#E04F00] rounded-full"

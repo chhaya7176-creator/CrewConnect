@@ -356,6 +356,35 @@ def matches_requirement(seeker: dict, req: dict) -> bool:
     return True
 
 
+def criteria_status(seeker: dict, req: dict) -> dict:
+    coc_list = req.get("coc", [])
+    return {
+        "Rank": seeker["rank"] == req["rank"],
+        "Vessel": (seeker["vessel_type"] == req["vessel_type"]) or (req["vessel_type"] == "Any"),
+        "Sea time": sea_time_rank(seeker["sea_time"]) >= sea_time_rank(req["sea_time"]),
+        "COC": ("Any" in coc_list) or (seeker.get("coc") in coc_list),
+    }
+
+
+def matched_labels(seeker: dict, req: dict) -> list:
+    return [k for k, v in criteria_status(seeker, req).items() if v]
+
+
+def gap_labels(seeker: dict, req: dict) -> list:
+    return [k for k, v in criteria_status(seeker, req).items() if not v]
+
+
+def dedup_by(items: list, keys: list) -> list:
+    seen, out = set(), []
+    for it in items:
+        sig = tuple(str(it.get(k)) for k in keys)
+        if sig in seen:
+            continue
+        seen.add(sig)
+        out.append(it)
+    return out
+
+
 def redact_seeker(seeker: dict, unlocked: bool) -> dict:
     out = {
         "id": seeker["id"],
@@ -413,17 +442,35 @@ async def get_matches(user=Depends(get_current_user)):
         unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
         unlocked_ids = {u["seeker_id"] for u in unlocks}
         seekers = await db.seekers.find({}, {"_id": 0}).to_list(1000)
-        matched = [s for s in seekers if matches_requirement(s, provider)]
+        matched, near = [], []
+        for s in seekers:
+            if matches_requirement(s, provider):
+                matched.append(s)
+            elif s["rank"] == provider["rank"]:
+                near.append(s)
         matched.sort(key=lambda s: (not s.get("boosted", False), s.get("created_at", "")), reverse=False)
-        result["matches"] = [redact_seeker(s, s["id"] in unlocked_ids) for s in matched]
+        near = dedup_by(near, ["rank", "vessel_type", "sea_time", "coc", "us_visa"])
+        result["matches"] = [{**redact_seeker(s, s["id"] in unlocked_ids),
+                              "match_reasons": matched_labels(s, provider)} for s in matched]
+        result["near_matches"] = [{**redact_seeker(s, False),
+                                   "gaps": gap_labels(s, provider)} for s in near[:6]]
         result["requirement"] = provider
     elif seeker:
         result["role"] = "seeker"
         elig = is_eligible(user)
         result["eligible"] = elig
         providers = await db.providers.find({}, {"_id": 0}).to_list(1000)
-        matched = [p for p in providers if matches_requirement(seeker, p)]
-        result["matches"] = [provider_card(p, elig) for p in matched]
+        matched, near = [], []
+        for p in providers:
+            if matches_requirement(seeker, p):
+                matched.append(p)
+            elif p["rank"] == seeker["rank"]:
+                near.append(p)
+        result["matches"] = [{**provider_card(p, elig),
+                              "match_reasons": matched_labels(seeker, p)} for p in matched]
+        near = dedup_by(near, ["company_name", "rank", "vessel_type", "sea_time"])
+        result["near_matches"] = [{**provider_card(p, elig),
+                                   "gaps": gap_labels(seeker, p)} for p in near[:6]]
         result["profile"] = seeker
     return result
 
