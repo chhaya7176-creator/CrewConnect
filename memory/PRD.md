@@ -33,8 +33,11 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Tested: 15/15 backend pass, 100% frontend E2E pass.
 
 ## Fixes (2026-06)
-- **Free unlocks + paid tier**: A company's first **10 crew-contact unlocks are FREE**, then **₹49** each (mocked). `POST /api/unlock-cv` returns `{amount, free, free_unlocks_left}`; `/api/matches`, `/api/browse`, `/api/saved-searches/{id}/results` return `free_unlocks_left`. UI button reads "Unlock free · N left" then "Unlock full CV · ₹49". Verified boundary via curl (10×0 then 49).
-- **WhatsApp contact template**: Company→crew WhatsApp opens prefilled: "Hi <Crew>, we found your profile on Smart Crewing for a <rank> position. / Can you share your CV on my email ID (<company email>) or here on WhatsApp? / Regards / <company name>". Company email+name pulled from the logged-in company's own requirement (`res.requirement`). Shared helper `lib/waMessage.js`.
+- **Landing background**: brighter sunlit aerial container-ship image (ship on right, open sea on left) + lightened overlay.
+- **Eligibility gate merged**: seeker share-or-pay is now ONE stacked box — "One-time Registration" (₹100 struck-through) on top → "OR" → bold bright-green "Simply Share for Free — Share & Visibility" (RECOMMENDED) with group/contact share, nudging sharing over paying.
+- **WhatsApp link country code**: `waLink` prepends `91` when a bare 10-digit number has no country code (fixed "number not on WhatsApp").
+- **Free unlocks + paid tier**: first 10 crew unlocks FREE, then ₹49.
+- **WhatsApp contact template**: prefilled Hi/CV-request/Regards message using company's own email + name.
 - **Match Alerts**: WhatsApp opt-in toggle + new-match banner (simulated wa.me deep-link, no automated send).
 - **Save Filters (companies)**: "Saved Searches" tab — save requirement, view matching crew newest-first with NEW tags + "N new" badge.
 - **Smart phone input**: auto country/dial-code detection (ipapi.co, 2s abort → +91), renders immediately, E.164.

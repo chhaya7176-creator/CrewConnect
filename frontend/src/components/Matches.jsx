@@ -135,18 +135,38 @@ const EligibilityGate = ({ referralCode, onEligible }) => {
         <h3 className="font-heading font-extrabold text-lg">Unlock company names & contacts</h3>
       </div>
       <p className="text-sm text-[#8A8F9E] mb-5">
-        You can browse all matching vacancies free. To reveal <b>company name & contact details</b>, either share Smart Crewing or pay a one-time registration.
+        You can browse all matching vacancies free. To reveal <b>company name & contact details</b>, simply share Smart Crewing — it's <b className="text-[#25D366]">free &amp; instant</b>.
       </p>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {/* Referral — highlighted */}
-        <div className="rounded-xl border-2 border-[#25D366]/60 bg-[#25D366]/5 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Gift className="w-4 h-4 text-[#25D366]" />
-            <span className="font-semibold text-sm text-[#25D366]">Share &amp; unlock — FREE</span>
+      <div className="max-w-2xl mx-auto">
+        {/* One-time registration — top, muted */}
+        <div className="rounded-xl border border-white/10 bg-black/20 p-4" data-testid="registration-section">
+          <div className="text-sm font-semibold mb-1">One-time Registration</div>
+          <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+            <span className="text-2xl font-heading font-extrabold text-[#8A8F9E] line-through decoration-[#ef4444] decoration-2">₹100</span>
+            <span className="text-sm text-[#DFFF00] font-semibold">Skip it with a free share below ↓</span>
+          </div>
+          <p className="text-xs text-[#8A8F9E] mb-4">Prefer not to share? Pay once to unlock all company contacts.</p>
+          <Button variant="outline" className="w-full rounded-full border-white/15 bg-transparent hover:bg-white/5 gap-2" disabled={busy} onClick={pay} data-testid="pay-register-btn">
+            <IndianRupee className="w-4 h-4" /> Pay ₹100 &amp; register
+          </Button>
+        </div>
+
+        {/* OR divider */}
+        <div className="flex items-center gap-3 my-4">
+          <div className="h-px flex-1 bg-white/10" />
+          <span className="text-xs font-bold text-[#8A8F9E] uppercase tracking-[0.3em]">OR</span>
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
+
+        {/* Share — highlighted & recommended */}
+        <div className="rounded-xl border-2 border-[#25D366]/60 bg-[#25D366]/5 p-4" data-testid="share-section">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <Gift className="w-5 h-5 text-[#25D366]" />
+            <span className="font-heading font-extrabold text-lg sm:text-xl text-[#25D366] drop-shadow-[0_0_10px_rgba(37,211,102,0.35)]">Simply Share for Free — Share &amp; Visibility</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">RECOMMENDED</span>
           </div>
-          <p className="text-xs text-[#8A8F9E] mb-3">Share with <b>2 WhatsApp groups</b> or <b>10 contacts</b>.</p>
+          <p className="text-xs text-[#8A8F9E] mb-3">Share with <b>2 WhatsApp groups</b> or <b>10 contacts</b> — unlock instantly, <b className="text-[#25D366]">no payment</b>.</p>
           <div className="flex gap-2 mb-3">
             <div className="flex-1 text-center rounded-lg bg-black/30 border border-white/10 py-2">
               <div className="font-data text-lg">{g}/2</div>
@@ -165,21 +185,8 @@ const EligibilityGate = ({ referralCode, onEligible }) => {
               <Share2 className="w-3.5 h-3.5" /> Send to contact
             </Button>
           </div>
-          <Button className="w-full rounded-full gap-2 bg-[#FF5A00] hover:bg-[#E04F00] disabled:opacity-40" disabled={!canClaim || busy} onClick={claim} data-testid="claim-free-btn">
+          <Button className="w-full rounded-full gap-2 bg-[#FF5A00] hover:bg-[#E04F00] disabled:bg-white/10 disabled:text-[#c9cdd6] disabled:opacity-100" disabled={!canClaim || busy} onClick={claim} data-testid="claim-free-btn">
             <CheckCircle2 className="w-4 h-4" /> {canClaim ? "Claim free access" : "Share more to unlock"}
-          </Button>
-        </div>
-
-        {/* Paid registration — struck through */}
-        <div className="rounded-xl border border-white/10 bg-black/20 p-4 flex flex-col">
-          <div className="text-sm font-semibold mb-2">One-time registration</div>
-          <div className="flex items-baseline gap-2 mb-1">
-            <span className="text-2xl font-heading font-extrabold text-[#8A8F9E] line-through decoration-[#ef4444] decoration-2">₹100</span>
-            <span className="text-sm text-[#DFFF00] font-semibold">Skip with a free share →</span>
-          </div>
-          <p className="text-xs text-[#8A8F9E] mb-4 flex-1">Prefer not to share? Pay once to unlock all company contacts.</p>
-          <Button variant="outline" className="w-full rounded-full border-white/15 bg-transparent hover:bg-white/5 gap-2" disabled={busy} onClick={pay} data-testid="pay-register-btn">
-            <IndianRupee className="w-4 h-4" /> Pay ₹100 &amp; register
           </Button>
         </div>
       </div>

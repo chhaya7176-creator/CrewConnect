@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only verification of the redesigned seafarer eligibility gate on the Matches tab. Logged in as seeker +919746835595 (OTP 123456), opened Matches, and validated DOM order, wording, styling and testids of data-testid=eligibility-gate. All requested structural/wording requirements PASS: single stacked box (registration-section and share-section share identical x=217 and width=672, registration y=620 above share y=830, so not side-by-side), registration section first with computed text-decoration 'line-through' on the ₹100 span plus yellow 'Skip it with a free share below \u2193' and working 'Pay \u20b9100 & register' button (pay-register-btn), an 'OR' divider positioned between the two sections (y=798), then share-section with bold green heading 'Simply Share for Free \u2014 Share & Visibility' (computed color rgb(37,211,102), font-weight 800) and a RECOMMENDED badge, Groups 0/2 and Contacts 0/10 counters, and buttons share-group-btn ('Share to group'), share-contact-btn ('Send to contact') and claim-free-btn labelled 'Share more to unlock' (correctly disabled while not eligible). Screenshot captured. No real share/payment was triggered. No console errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Matches \u2192 eligibility gate (desktop 1920px)", "issues": ["Inner content is capped at max-w-2xl (672px) inside a 1536px-wide gate card, leaving ~810px of empty space on the right \u2014 looks unbalanced on desktop; consider centering (mx-auto) the max-w-2xl block or widening it.", "Disabled 'Share more to unlock' button (claim-free-btn) renders as dark orange with dim white text (disabled:opacity-40) \u2014 low contrast; a muted/neutral disabled style with clearer text would read better."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": ["Optional polish only: center or widen the max-w-2xl inner block inside the eligibility gate on desktop; improve contrast of the disabled claim-free-btn."],
+  "critical_code_review_comments": ["EligibilityGate share() opens a WhatsApp window after POST /referral/share even if the POST fails (catch swallows the error) \u2014 counters can desync from server state; consider surfacing the failure.", "Matches.jsx is growing large (gate + cards + near matches in one file); consider extracting EligibilityGate into its own component file."],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested", "frontend": "100% (all 12 structural/wording assertions passed)"},
+  "seed_data_creation": "None (used existing seeker +919746835595, group_shares=0, contact_shares=0)",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Seeker +919746835595 / OTP 123456",
+  "context_for_next_testing_agent": "Login recipe works: /dashboard \u2192 wait 3.5s \u2192 select_option('IN') on [data-testid=login-phone] select \u2192 press_sequentially '9746835595' into login-phone-number \u2192 login-send-otp-btn \u2192 otp 123456 \u2192 login-verify-btn \u2192 tab-matches. Seeker +919746835595 is still NOT eligible (0/2 groups, 0/10 contacts), so the gate still renders \u2014 do not click pay-register-btn or claim in tests or it will become eligible.",
+  "rca_of_the_issue": "N/A \u2014 no functional defects found this round."
+}
