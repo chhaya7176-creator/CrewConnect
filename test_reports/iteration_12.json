@@ -1,0 +1,31 @@
+{
+  "summary": "Retest of Get Noticed Faster (₹499) after iteration_11 fixes. All 6 spec items now PASS on the frontend. Chat done-panel correctly renders <GetNoticedFaster/> with all gnf-* testids and no legacy ₹100 markup. Matches tab now shows the promoted/active state (get-noticed-active) after both ₹499 mock pay and referral-share auto-unlock — the card no longer disappears. Dashboard boost-btn reads 'Get Noticed Faster · ₹499'. Homepage HOW-IT-WORKS card 04 no longer contains '₹100' (says ₹499). cfg race is guarded (disabled={!cfg} on role buttons + startRole null-guard).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/chat_done_panel_v12.png",
+    "/app/test_reports/matches_active_state.png",
+    "/app/test_reports/matches_9555_state.png"
+  ],
+  "action_items": [
+    "OPTIONAL/LOW: Dashboard.jsx boost-btn currently always shows 'Get Noticed Faster · ₹499' — spec allowed EITHER '₹499' OR 'Promoted ✓ once unlocked'. Consider swapping label to 'Promoted ✓' when elig.eligible so users get post-unlock feedback on the dashboard too.",
+    "OPTIONAL/LOW: Matches.jsx still contains dead EligibilityGate code (~lines 100-171) with legacy '₹100 / Pay ₹100 & register / share-section / registration-section / 10 contacts' testids and copy — no longer rendered but should be removed to avoid selector collisions and future regressions (called out in iter_11 too)."
+  ],
+  "critical_code_review_comments": [
+    "ChatFlow.jsx is 527 lines — approaching the 700-line threshold; consider extracting the done-panel and mobile+OTP into hooks/components.",
+    "Matches.jsx retains a full duplicate EligibilityGate implementation (dead code) with conflicting testids vs GetNoticedFaster — remove.",
+    "GetNoticedFaster.jsx uses window.open('https://wa.me/...') directly — fine for demo, but making the share opener a prop would improve testability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not tested — backend already curl-verified per request)", "frontend": "100% (6/6 spec items pass)"},
+  "test_credentials": "OTP 123456. Used +919746835595 (TEST_QA Skip Seafarer — was 'just reset'; became promoted via ₹499 pay during this run) and +919555000111 (Gate Demo — was 'just reset'; became promoted via 2 group-shares referral during this run). BOTH ARE NOW PROMOTED AGAIN — next testing agent will need them reset again before retesting the gate→flip transition, otherwise they'll load directly into get-noticed-active state. Fresh phone used for chat signup: +91 (random 10-digit).",
+  "seed_data_creation": "Promoted state was set on for +919746835595 via ₹499 mock pay and +919555000111 via referral share x2. A fresh seeker profile was also created via chat with a random 10-digit +91 mobile.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 6 items in the retest request now pass. Verified testids: chat-done-panel contains {get-noticed-faster, gnf-share-section, gnf-referral-link, gnf-share-group-btn, gnf-share-contact-btn, gnf-pay-section, gnf-pay-btn}; no visibility-offer or chat-pay-register-btn present. Matches tab flips from get-noticed-faster → get-noticed-active after gnf-pay-btn click (shows 'No matching companies yet' note) and after 2 x gnf-share-group-btn clicks (shows 14+ promoted-company rows for 9555000111 in this run). Dashboard boost-btn label = 'Get Noticed Faster · ₹499'. Homepage HOW IT WORKS card 04 now says 'Companies unlock a full CV for ₹49. Seafarers get noticed faster free by sharing — or a one-time ₹499 boost.' cfg-race: role buttons have disabled={!cfg} and startRole has 'if (!cfg) return' guard. To retest the gate→active flip you'll need to reset both promoted seekers server-side.",
+  "rca of the issue": "N/A — iteration_11 blockers are resolved: (1) ChatFlow.jsx now imports and renders <GetNoticedFaster referralCode={done.referral} onUnlocked={...}/> in the seeker chat-done-panel; the legacy ₹100 visibility-offer block was removed. (2) Matches.jsx now renders <GetNoticedFaster/> unconditionally in the seeker view (no `!eligible` guard), so once eligibility flips the internal component switches to its active-state view (get-noticed-active + promoted-company rows / 'No matching companies yet' note) instead of unmounting."
+}

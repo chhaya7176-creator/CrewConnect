@@ -44,6 +44,16 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - **"Why matched" tags** + de-duplicated empty-match nudge.
 - **Mobile normalization** (last-10-digit key) — one phone = one account.
 
+## Fixes (2026-06)
+- **Get Noticed Faster (₹499)** — seafarer premium upgrade replacing the old ₹100 everywhere (chat done-panel, Matches gate, Dashboard button). Unlock via ₹499 MOCK pay (Stripe claimable sandbox NOT available for India → mock now; wire Razorpay/Indian Stripe later) OR share to 2 WhatsApp groups / 20 contacts (prominent pulsing CTA, auto-unlocks at target). When unlocked: profile marked promoted (boosted) + shows "companies your profile was shared with" (matching companies). New confirmation on submit: "Your details are now live...". Endpoints: POST /get-noticed/pay, GET /promoted-companies, POST /referral/claim (2 groups OR 20 contacts). Component: `GetNoticedFaster.jsx`. Verified 100% (iteration_12).
+- Removed ₹100 from all seafarer-facing UI incl. homepage HOW-IT-WORKS copy. cfg-race guard on chat role buttons.
+- **Merged visibility offer** (prior), brighter ship background, WhatsApp country-code fix, first-10-free-then-₹49 company unlocks, WhatsApp contact template.
+
+## Known / Backlog
+- Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
+- Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).
+- Dead `EligibilityGate` code remains in Matches.jsx (not rendered) — safe to delete later.
+
 ## Backlog / Remaining
 - P1: Real SMS OTP (Twilio) and real payments (Stripe/Razorpay) for production
 - P1: Real WhatsApp Business API integration (Meta/Twilio)
