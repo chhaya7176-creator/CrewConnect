@@ -33,8 +33,8 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Tested: 15/15 backend pass, 100% frontend E2E pass.
 
 ## Fixes (2026-06)
+- **Merged visibility offer (BOTH screens)**: The seafarer share-or-pay is now ONE stacked box on the Matches gate AND the chat post-submit panel — "One-time Registration for Visibility" (₹100 struck-through) on top → "OR" → bold bright-green "Simply Share for Free — Share & Visibility" (RECOMMENDED) with WhatsApp share. Nudges sharing over paying. Verified via testing agent (iteration_9 gate, iteration_10 chat panel).
 - **Landing background**: brighter sunlit aerial container-ship image (ship on right, open sea on left) + lightened overlay.
-- **Eligibility gate merged**: seeker share-or-pay is now ONE stacked box — "One-time Registration" (₹100 struck-through) on top → "OR" → bold bright-green "Simply Share for Free — Share & Visibility" (RECOMMENDED) with group/contact share, nudging sharing over paying.
 - **WhatsApp link country code**: `waLink` prepends `91` when a bare 10-digit number has no country code (fixed "number not on WhatsApp").
 - **Free unlocks + paid tier**: first 10 crew unlocks FREE, then ₹49.
 - **WhatsApp contact template**: prefilled Hi/CV-request/Regards message using company's own email + name.
