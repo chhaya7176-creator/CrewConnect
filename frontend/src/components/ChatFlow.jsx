@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2, Upload } from "lucide-react";
+import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2, Upload, IndianRupee, Gift } from "lucide-react";
 import { formatDateInput } from "@/lib/formatDate";
 import { PhoneField } from "@/components/PhoneField";
 import { isValidPhoneNumber } from "react-phone-number-input";
@@ -64,6 +64,7 @@ export const ChatFlow = () => {
   const [summary, setSummary] = useState("");
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [done, setDone] = useState(null);
+  const [paying, setPaying] = useState(false);
   const scrollRef = useRef(null);
   const cvInputRef = useRef(null);
   const [cvUploading, setCvUploading] = useState(false);
@@ -271,32 +272,69 @@ export const ChatFlow = () => {
     }
   };
 
+  const payRegister = async () => {
+    setPaying(true);
+    try {
+      await api.post("/register/pay");
+      toast.success("Registered! (₹100 paid — demo)");
+      navigate("/dashboard");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Payment failed");
+    } finally {
+      setPaying(false);
+    }
+  };
+
   const renderInput = () => {
     if (done) {
       return (
         <div className="space-y-3" data-testid="chat-done-panel">
           {role === "seeker" && (
-          <div className="p-4 rounded-xl bg-[#0066FF]/10 border border-[#0066FF]/40">
-            <div className="flex items-center gap-2 text-[#4d94ff] font-semibold text-sm mb-1">
-              <Share2 className="w-4 h-4" /> Unlock free visibility
-            </div>
-            <p className="text-xs text-[#8A8F9E] mb-3">
-              Share this link with 2 WhatsApp groups OR 10 contacts to make your{" "}
-              {role === "seeker" ? "profile" : "requirement"} visible for free.
-            </p>
-            <div className="flex gap-2">
-              <Input readOnly value={done.link} className="bg-black/40 border-white/10 font-data text-xs" data-testid="referral-link" />
-              <Button
-                size="sm"
-                className="bg-[#25D366] hover:bg-[#1da851] text-black font-semibold shrink-0"
-                onClick={() => {
-                  const text = encodeURIComponent(`Join me on Smart Crewing — get matched with shipping ${role === "seeker" ? "jobs" : "crew"}! ${done.link}`);
-                  window.open(`https://wa.me/?text=${text}`, "_blank");
-                }}
-                data-testid="share-whatsapp-btn"
-              >
-                <Share2 className="w-4 h-4 mr-1" /> WhatsApp
+          <div className="p-4 rounded-xl bg-[#0A0B12] border border-[#0066FF]/40" data-testid="visibility-offer">
+            {/* ₹100 one-time visibility — struck through */}
+            <div className="rounded-xl border border-white/10 bg-black/20 p-4" data-testid="chat-registration-section">
+              <div className="text-sm font-semibold mb-1">One-time Registration for Visibility</div>
+              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                <span className="text-2xl font-heading font-extrabold text-[#8A8F9E] line-through decoration-[#ef4444] decoration-2">₹100</span>
+                <span className="text-sm text-[#DFFF00] font-semibold">Skip it with a free share below ↓</span>
+              </div>
+              <p className="text-xs text-[#8A8F9E] mb-4">Pay once to make your profile visible and unlock all company contacts.</p>
+              <Button variant="outline" className="w-full rounded-full border-white/15 bg-transparent hover:bg-white/5 gap-2" disabled={paying} onClick={payRegister} data-testid="chat-pay-register-btn">
+                <IndianRupee className="w-4 h-4" /> Pay ₹100 &amp; register
               </Button>
+            </div>
+
+            {/* OR divider */}
+            <div className="flex items-center gap-3 my-4">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-xs font-bold text-[#8A8F9E] uppercase tracking-[0.3em]">OR</span>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+
+            {/* Share for free — highlighted */}
+            <div className="rounded-xl border-2 border-[#25D366]/60 bg-[#25D366]/5 p-4" data-testid="chat-share-section">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <Gift className="w-5 h-5 text-[#25D366]" />
+                <span className="font-heading font-extrabold text-lg text-[#25D366] drop-shadow-[0_0_10px_rgba(37,211,102,0.35)]">Simply Share for Free — Share &amp; Visibility</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">RECOMMENDED</span>
+              </div>
+              <p className="text-xs text-[#8A8F9E] mb-3">
+                Share this link with <b>2 WhatsApp groups</b> OR <b>10 contacts</b> to make your profile visible — <b className="text-[#25D366]">free &amp; instant</b>.
+              </p>
+              <div className="flex gap-2">
+                <Input readOnly value={done.link} className="bg-black/40 border-white/10 font-data text-xs" data-testid="referral-link" />
+                <Button
+                  size="sm"
+                  className="bg-[#25D366] hover:bg-[#1da851] text-black font-semibold shrink-0"
+                  onClick={() => {
+                    const text = encodeURIComponent(`Join me on Smart Crewing — get matched with shipping jobs! ${done.link}`);
+                    window.open(`https://wa.me/?text=${text}`, "_blank");
+                  }}
+                  data-testid="share-whatsapp-btn"
+                >
+                  <Share2 className="w-4 h-4 mr-1" /> WhatsApp
+                </Button>
+              </div>
             </div>
           </div>
           )}
