@@ -1,0 +1,47 @@
+{
+  "summary": "Frontend-only verification of the new 'Get Noticed Faster' ₹499 feature. Dashboard button, Matches-tab gate, referral auto-unlock and ₹499 mock-pay were verified end-to-end via real login flow using +919746835595 and +919555000111. CRITICAL: ChatFlow done-panel still renders the OLD ₹100 flow instead of <GetNoticedFaster/>. Also, once a seeker becomes eligible, the Matches tab hides the card instead of flipping it to the promoted/active state.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ChatFlow.jsx (done-panel)", "issue": "Spec requires <GetNoticedFaster referralCode={done.referral} onUnlocked={..}/> to render in chat-done-panel for seekers. Code instead renders the OLD ₹100 visibility-offer (data-testid=visibility-offer) containing 'Pay ₹100 & register' (chat-pay-register-btn), the old chat-share-section with 'Simply Share for Free — Share & Visibility' heading, share-whatsapp-btn, referral-link filled with done.link, and mentions ₹100 + '10 contacts' target. get-noticed-faster / gnf-* testids DO NOT exist in ChatFlow.", "selector": "[data-testid=chat-done-panel]", "priority": "CRITICAL"},
+      {"component": "Matches.jsx (post-unlock state)", "issue": "After referral auto-unlock (2 group shares) or ₹499 pay, the Matches tab does NOT show the 'get-noticed-active' promoted card with the 'companies your profile has been shared with' list. Because Matches.jsx guards with `!eligible && <GetNoticedFaster/>`, the card unmounts once eligible=true and only the old 'Company names & contacts are unlocked' eligible-banner is shown. Spec: 'flip the card to the promoted/active state (data-testid=get-noticed-active) listing companies (data-testid=promoted-company)'.", "selector": "[data-testid=matches-seeker]", "priority": "HIGH"},
+      {"component": "Homepage 'HOW IT WORKS' section (public /)", "issue": "Card 04 'Match & unlock' still reads: 'Companies unlock a full CV for ₹49. Seafarers unlock company contacts free by sharing — or a one-time ₹100.' Spec says the old ₹100 should be gone everywhere on seafarer-facing pages.", "selector": "main .how-it-works (marketing card 04)", "priority": "MEDIUM"},
+      {"component": "Matches.jsx old EligibilityGate", "issue": "Dead code with '₹100 / Pay ₹100 & register / share-section / registration-section' remains in the file (~lines 100-171) even though it's no longer rendered (line 316 now uses <GetNoticedFaster/>). It also still mentions '10 contacts' (old target). Recommend removing dead code to avoid regressions and misleading testids.", "selector": "[data-testid=eligibility-gate] / [data-testid=registration-section]", "priority": "LOW"},
+      {"component": "ChatFlow.jsx startRole", "issue": "Race error 'Cannot read properties of null (reading ranks)' if user taps role-seeker-btn before /api/config finishes loading. Should render the role picker only when cfg is loaded, or add a null guard inside buildSeekerSteps/buildProviderSteps.", "selector": "[data-testid=role-seeker-btn]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Referral → auto-unlock on Matches", "issue": "Auto-unlock backend call succeeds and toast 'Unlocked! Your profile is now promoted 🎉' appears after the 2nd Share-to-group click, but the UI does not display the promoted/active state on Matches — the card disappears entirely (see UI bug above).", "affected_selectors": ["[data-testid=gnf-share-group-btn]", "[data-testid=get-noticed-active]", "[data-testid=promoted-companies]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/matches_gate.png",
+    "/app/test_reports/dashboard_state.png",
+    "/app/test_reports/after_shares.png",
+    "/app/test_reports/post_unlock_state.png",
+    "/app/test_reports/matches_already_eligible.png",
+    "/app/test_reports/dashboard_after_pay.png",
+    "/app/test_reports/chat_done_actual.png"
+  ],
+  "action_items": [
+    "ChatFlow.jsx: replace the visibility-offer block (lines ~291-340) with <GetNoticedFaster referralCode={done.referral || done.link.split('ref=')[1]} onUnlocked={()=>navigate('/dashboard')} /> and remove all ₹100/chat-pay-register-btn/chat-share-section/share-whatsapp-btn markup. Ensure `done` payload includes referral (currently `done.link` exposes the code).",
+    "Matches.jsx: (a) remove dead EligibilityGate component + '₹100 / Pay ₹100 & register' code, (b) render <GetNoticedFaster/> in BOTH the !eligible AND the eligible-but-!boosted state so users see get-noticed-active with promoted-company list after unlock — currently the card is unmounted the moment eligible flips to true.",
+    "Homepage HOW IT WORKS card 04: remove '₹100' from Match & unlock copy for seafarers (or replace with ₹499 boost wording as appropriate).",
+    "ChatFlow.jsx startRole: guard against cfg==null (e.g., disable role buttons or show a loading state until /config resolves) to prevent 'reading ranks' TypeError.",
+    "Consider updating remaining '10 contacts' string in Matches.jsx dead code / any leftover copy to '20 contacts' aligned with CONTACT_TARGET=20 in GetNoticedFaster."
+  ],
+  "critical_code_review_comments": [
+    "ChatFlow.jsx: 583 lines — approaching the 700-line threshold and mixes chat state, mobile OTP, CV upload, summary generation and the (now-obsolete) visibility offer. Split the done-panel into its own component (already have GetNoticedFaster ready) and extract mobile+OTP into a hook.",
+    "Matches.jsx: contains a full duplicate EligibilityGate implementation (dead code) with its own ₹100 wording and testids conflicting with GetNoticedFaster (registration-section vs gnf-pay-section, share-section vs gnf-share-section). This will confuse future testing and cause selector collisions.",
+    "GetNoticedFaster.jsx window.open('https://wa.me/?text=...') is not testable in headless envs — good that it's non-blocking; consider making the share opener a prop for easier stubbing.",
+    "Dashboard.jsx boost() has no confirmation modal — clicking 'Get Noticed Faster · ₹499' immediately posts /get-noticed/pay with no explicit consent step. Acceptable for demo/mock but should be gated by a confirmation UI in production."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not tested — already curl-verified per request)", "frontend": "60% (3/5 spec items verified fully, 1 blocked by ChatFlow, 1 partially working)"},
+  "test_credentials": "OTP 123456. Used +919746835595 (TEST_QA Skip Seafarer — got promoted via referral during this run) and +919555000111 (Gate Demo — got promoted via ₹499 mock pay during this run). Both are now in promoted state; use a fresh +91 mobile for retesting.",
+  "seed_data_creation": "Promoted state was toggled on for +919746835595 (via referral share x2) and +919555000111 (via ₹499 mock pay). No new profiles created.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Chat seeker signup is flaky in playwright due to a race between /api/config resolving and role-seeker-btn click (throws null.ranks). Wait ~4s after navigate before clicking role. To test chat-done-panel, complete the OTP step by reading the demo_otp toast (or just fill '123456' into chat-text-input when the bot last message contains 'OTP'). Testids used by CURRENT ChatFlow.jsx done-panel are the OLD ones (visibility-offer, chat-registration-section, chat-pay-register-btn, chat-share-section, share-whatsapp-btn, referral-link) — spec wants get-noticed-faster/gnf-*. Once main agent fixes ChatFlow to render <GetNoticedFaster/>, re-run the chat flow and verify get-noticed-faster + gnf-pay-btn + gnf-share-group-btn are all present in [data-testid=chat-done-panel]. Also re-verify Matches tab flips to get-noticed-active after unlock (currently it hides the card entirely).",
+  "rca of the issue": "Root cause for missing get-noticed-faster in chat done-panel: ChatFlow.jsx was never updated to import/use the new GetNoticedFaster component. The inline OLD visibility-offer JSX (₹100 registration + old share section) is still hard-coded in renderInput() when `done` is truthy. Fix: `import { GetNoticedFaster } from '@/components/GetNoticedFaster'` and replace the visibility-offer block with <GetNoticedFaster referralCode={done.referral} onUnlocked={()=>navigate('/dashboard')} />; also ensure the /profile/submit response returns `referral` (or parse it from done.link). Root cause for Matches not showing active state after unlock: Matches.jsx line 316 `{!eligible && <GetNoticedFaster/>}` unmounts the component the moment eligibility flips, so the internal `eligible ? active-view : share-view` render inside GetNoticedFaster never gets to show its active view. Fix: change to `{!boosted && <GetNoticedFaster/>}` (or drop the guard entirely and let the component decide) so the promoted/active state renders after unlock."
+}

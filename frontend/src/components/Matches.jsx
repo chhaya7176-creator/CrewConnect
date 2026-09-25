@@ -313,7 +313,7 @@ export const Matches = ({ browse = false, onChange }) => {
   return (
     <div data-testid="matches-seeker">
       {alerts}
-      {!eligible && <GetNoticedFaster referralCode={res.profile?.referral_code} onUnlocked={load} />}
+      {<GetNoticedFaster referralCode={res.profile?.referral_code} onUnlocked={load} />}
       {eligible && (
         <div className="mb-6 flex items-center gap-2 text-sm text-[#25D366] rounded-xl border border-[#25D366]/30 bg-[#25D366]/5 px-4 py-3" data-testid="eligible-banner">
           <CheckCircle2 className="w-4 h-4" /> Company names &amp; contacts are unlocked. Tap WhatsApp to reach out directly.

@@ -16,7 +16,7 @@ const STEPS = [
   { icon: Zap, title: "Chat & fill", text: "Answer a few quick questions on our WhatsApp-style bot." },
   { icon: ShieldCheck, title: "Verify by OTP", text: "Secure your profile with mobile OTP verification." },
   { icon: FileCheck2, title: "AI profile", text: "Get an instant AI-written profile — edit and submit." },
-  { icon: IndianRupee, title: "Match & unlock", text: "Companies unlock a full CV for ₹49. Seafarers unlock company contacts free by sharing — or a one-time ₹100." },
+  { icon: IndianRupee, title: "Match & unlock", text: "Companies unlock a full CV for ₹49. Seafarers get noticed faster free by sharing — or a one-time ₹499 boost." },
 ];
 
 export default function Home() {
