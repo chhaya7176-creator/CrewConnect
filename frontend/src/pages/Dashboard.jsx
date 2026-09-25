@@ -38,11 +38,11 @@ export default function Dashboard() {
 
   const boost = async () => {
     try {
-      await api.post("/boost-profile");
-      toast.success("Profile boosted! (₹100 paid — demo)");
+      await api.post("/get-noticed/pay");
+      toast.success("You're now promoted! (₹499 — demo)");
       loadDashboard();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "No profile to boost");
+      toast.error(e.response?.data?.detail || "Could not upgrade");
     }
   };
 
@@ -85,7 +85,7 @@ export default function Dashboard() {
               data-testid="boost-btn"
             >
               <Rocket className="w-4 h-4" />
-              {seekerProfile.boosted ? "Profile Boosted ✓" : "Boost Profile · ₹100"}
+              {seekerProfile.boosted ? "Promoted ✓" : "Get Noticed Faster · ₹499"}
             </Button>
           )}
         </div>

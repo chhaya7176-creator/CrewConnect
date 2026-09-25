@@ -689,10 +689,11 @@ async def referral_share(body: ShareIn, user=Depends(get_current_user)):
 async def referral_claim(user=Depends(get_current_user)):
     u = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     g, c = u.get("ref_group_shares", 0), u.get("ref_contact_shares", 0)
-    if g >= 2 or c >= 10:
+    if g >= 2 or c >= 20:
         await db.users.update_one({"id": user["id"]}, {"$set": {"ref_completed": True}})
+        await db.seekers.update_many({"user_id": user["id"]}, {"$set": {"boosted": True}})
         return {"success": True, "ref_completed": True}
-    raise HTTPException(status_code=400, detail=f"Share with 2 groups OR 10 contacts first. Progress: {g}/2 groups, {c}/10 contacts.")
+    raise HTTPException(status_code=400, detail=f"Share with 2 groups OR 20 contacts first. Progress: {g}/2 groups, {c}/20 contacts.")
 
 
 @api_router.post("/register/pay")
@@ -704,6 +705,30 @@ async def register_pay(user=Depends(get_current_user)):
     await db.payments.insert_one({"user_id": user["id"], "type": "registration", "amount": 100,
                                   "at": datetime.now(timezone.utc).isoformat()})
     return {"success": True, "amount": 100, "reg_paid": True}
+
+
+@api_router.post("/get-noticed/pay")
+async def get_noticed_pay(user=Depends(get_current_user)):
+    """Mock ₹499 'Get noticed faster' unlock — promotes the seafarer's profile."""
+    await db.users.update_one({"id": user["id"]}, {"$set": {"reg_paid": True}})
+    await db.seekers.update_many({"user_id": user["id"]}, {"$set": {"boosted": True}})
+    await db.payments.insert_one({"user_id": user["id"], "type": "get_noticed_faster", "amount": 499,
+                                  "at": datetime.now(timezone.utc).isoformat()})
+    return {"success": True, "amount": 499, "eligible": True}
+
+
+@api_router.get("/promoted-companies")
+async def promoted_companies(user=Depends(get_current_user)):
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or {}
+    eligible = bool(u.get("reg_paid") or u.get("ref_completed"))
+    seeker = await db.seekers.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not eligible or not seeker:
+        return {"eligible": eligible, "companies": [], "count": 0}
+    providers = await db.providers.find({}, {"_id": 0}).to_list(1000)
+    matched = [p for p in providers if matches_requirement(seeker, p)]
+    companies = [{"company_name": p.get("company_name"), "rank": p.get("rank"),
+                  "vessel_type": p.get("vessel_type"), "shared_at": p.get("created_at", "")} for p in matched]
+    return {"eligible": True, "companies": companies, "count": len(companies)}
 
 
 @api_router.get("/dashboard")
