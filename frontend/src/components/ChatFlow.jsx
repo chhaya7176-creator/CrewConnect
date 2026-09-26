@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2, Upload } from "lucide-react";
+import { Anchor, Send, Sparkles, Share2, LayoutDashboard, CheckCircle2, Ship, Building2, Upload, Undo2 } from "lucide-react";
 import { formatDateInput } from "@/lib/formatDate";
 import { PhoneField } from "@/components/PhoneField";
 import { isValidPhoneNumber } from "react-phone-number-input";
@@ -110,6 +110,26 @@ export const ChatFlow = () => {
     if (next >= curFlow.length) return;
     setIdx(next);
     pushBotStep(curFlow[next]);
+  };
+
+  // Let users fix a mistaken answer while filling — steps back one question.
+  // Safe before OTP; after verification we never re-enter the mobile/otp steps.
+  const goBack = () => {
+    if (idx <= 0 || done || !step || step.type === "otp") return;
+    const otpIdx = flow.findIndex((f) => f.type === "otp");
+    const pastAuth = otpIdx >= 0 && idx > otpIdx;
+    const prev = flow[idx - 1];
+    if (pastAuth && prev && (prev.type === "otp" || prev.type === "mobile")) return;
+    setTyping(false);
+    setMessages((m) => {
+      const copy = [...m];
+      if (copy.length && copy[copy.length - 1].from === "bot") copy.pop();   // current prompt
+      if (copy.length && copy[copy.length - 1].from === "user") copy.pop();  // last answer
+      return copy;
+    });
+    setInput("");
+    setMulti([]);
+    setIdx(idx - 1);
   };
 
   const genSummary = async (data) => {
@@ -518,6 +538,22 @@ export const ChatFlow = () => {
         {!role && !done && <div className="pt-1">{roleBoxes}</div>}
         {role && cfg && (
           <div className="pt-2 animate-fade-up" data-testid="chat-input-inline">
+            {(() => {
+              const otpIdx = flow.findIndex((f) => f.type === "otp");
+              const pastAuth = otpIdx >= 0 && idx > otpIdx;
+              const prev = flow[idx - 1];
+              const show = !done && step && idx > 0 && !typing && step.type !== "otp"
+                && (pastAuth ? (prev && prev.type !== "otp" && prev.type !== "mobile") : true);
+              return show ? (
+                <button
+                  onClick={goBack}
+                  className="mb-2 inline-flex items-center gap-1.5 text-xs text-[#8A8F9E] hover:text-white transition-colors"
+                  data-testid="chat-back-btn"
+                >
+                  <Undo2 className="w-3.5 h-3.5" /> Correct last answer
+                </button>
+              ) : null;
+            })()}
             {renderInput()}
           </div>
         )}
