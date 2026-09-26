@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 14 validated (a) Twilio WhatsApp company alerts in DEMO mode with gating/triggers/dedupe, (b) PUT edit endpoints for seeker & provider incl. ownership + boosted-flag preservation, and (c) referral self-signup gate + 2-signup auto-unlock regression. 10/10 backend tests pass; frontend Edit + CompanyAlerts flows verified end-to-end on the live preview URL.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verifications": {
+    "backend": {
+      "non_paying_company_no_alerts": "GET /wa-alerts returns [] before any unlock/subscribe",
+      "unlock_cv_generates_alert_trigger_B": "kind=matching_crew, status=simulated, mode=demo, to starts with '+', message='A new matching Chief Engineer is available on Smart Crewing.'",
+      "get_noticed_pay_notifies_paying_companies_trigger_A": "matching paying company receives exactly 1 alert for the boosted seeker",
+      "dedupe_per_company_seeker": "re-boost + re-post matching requirement yields exactly 1 wa_alerts row",
+      "put_seeker_profile_updates_and_preserves_boosted": "sending boosted=false is ignored; other fields persist; returned doc has boosted=true",
+      "put_provider_requirement_updates_fields": "company_name/rank/vessel_type/coc list update and persist",
+      "ownership_enforcement_404": "seeker & provider edit by non-owner returns 404",
+      "referral_self_ref_not_counted": "verify-otp with own ref_code -> ref_signups stays 0",
+      "referral_two_real_signups_auto_unlock": "GET /eligibility -> ref_signups>=2, ref_completed=true, eligible=true"
+    },
+    "frontend": {
+      "provider_dashboard_matches_company_wa_alerts_panel": "visible with DEMO badge and the exact alert message",
+      "my_posts_edit_button_present": "data-testid edit-post-btn-<id> rendered for provider & seeker cards",
+      "edit_dialog_prefill_and_save": "opens data-testid=edit-post-dialog, fields pre-filled, edit-save-btn persists change (visible after full page reload)",
+      "seeker_edit_preserves_boosted_badge": "after saving edited name, reload shows updated name AND BOOSTED badge still present"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_wa_alerts_and_edit.py",
+    "/app/test_reports/pytest/iteration_14.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "notify_company_of_boosted_matches after PUT /provider/requirement/{id} loops through ALL currently-boosted matching seekers each time a requirement is edited. Dedupe on (company, seeker) prevents duplicate rows, but on the very first company post/unlock a company can receive many alerts in one shot (as observed: 12 rows for one paying company against a dev DB with many boosted seekers). This is intended by design but flag if UX volume becomes a concern in production.",
+    "EditPostDialog.jsx save() sends consent=true unconditionally — correct given the model requires it, but note the mobile field is disabled in UI yet still submitted; if mobile ever changed in DB out-of-band, this would overwrite it back to the original.",
+    "PUT /seeker/profile also triggers notify_companies_of_seeker whenever doc.boosted is true — combined with the boosted preservation and dedupe this is safe, but every edit re-scans providers. Consider only firing when rank/vessel_type/sea_time/coc actually changed.",
+    "server.py is 1592 lines — well above the 700-line guideline. Consider splitting into routers (auth, seeker, provider, matches, alerts, referral)."
+  ],
+  "updated_files": ["/app/backend/tests/test_wa_alerts_and_edit.py"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% for requested flows"},
+  "test_credentials": "OTP always 123456. Tests create fresh +91XXXXXXXXXX accounts via /api/auth/request-otp + verify-otp per case.",
+  "seed_data_creation": "Backend tests and the Playwright run each create fresh seeker+provider pairs, then boost + unlock to produce demo wa_alerts rows. No cleanup performed (mobile_key collisions negligible; assertions filter by seeker_id).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 14 features (WA alerts DEMO mode, edit endpoints, referral gate) all green. Reusable regression test: /app/backend/tests/test_wa_alerts_and_edit.py. Note wa_alerts collection accumulates across runs in dev DB — assertions must filter by seeker_id, not rely on total count. When testing CompanyAlerts UI, seed via API (POST get-noticed/pay then POST unlock-cv) and inject token into localStorage['mc_token'] to bypass the chat signup flow."
+}
