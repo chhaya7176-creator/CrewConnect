@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList, Bookmark } from "lucide-react";
+import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList, Bookmark, Pencil } from "lucide-react";
+import { EditPostDialog } from "@/components/EditPostDialog";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -123,7 +124,7 @@ export default function Dashboard() {
             </TabsContent>
           )}
           <TabsContent value="posts" className="mt-6">
-            <MyPosts data={data} />
+            <MyPosts data={data} onChange={loadDashboard} />
           </TabsContent>
           <TabsContent value="documents" className="mt-6">
             <Documents onChange={loadDashboard} />
@@ -188,18 +189,27 @@ const HistoryView = ({ data }) => {
   );
 };
 
-const MyPosts = ({ data }) => {
+const MyPosts = ({ data, onChange }) => {
   const reqs = data?.provider_requirements || [];
   const profs = data?.seeker_profiles || [];
   const isCompany = reqs.length > 0;
   const items = isCompany ? reqs : profs;
+  const [editing, setEditing] = useState(null);
   if (!items.length) return <Empty text="You haven't posted anything yet. Start in the chat on the home page." />;
   return (
+    <>
     <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="my-posts">
       {items.map((p) => (
         <div key={p.id} className="rounded-xl border border-white/10 bg-[#0A0B12] p-5" data-testid={`post-${p.id}`}>
-          <div className="font-heading font-bold">{isCompany ? p.company_name : p.name}</div>
-          <div className="text-xs text-[#8A8F9E] mb-3">{p.rank} · {p.vessel_type}</div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="font-heading font-bold">{isCompany ? p.company_name : p.name}</div>
+              <div className="text-xs text-[#8A8F9E] mb-3">{p.rank} · {p.vessel_type}</div>
+            </div>
+            <Button size="sm" variant="outline" className="rounded-full border-white/15 bg-transparent hover:bg-white/5 gap-1.5 h-8 px-3 text-xs shrink-0" onClick={() => setEditing(p)} data-testid={`edit-post-btn-${p.id}`}>
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </Button>
+          </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div><span className="text-[#8A8F9E] text-[10px] uppercase">Sea time</span><div className="font-data">{p.sea_time}</div></div>
             <div><span className="text-[#8A8F9E] text-[10px] uppercase">COC</span><div className="font-data">{Array.isArray(p.coc) ? p.coc.join(", ") : p.coc}</div></div>
@@ -211,6 +221,8 @@ const MyPosts = ({ data }) => {
         </div>
       ))}
     </div>
+    <EditPostDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} post={editing} isCompany={isCompany} onSaved={onChange} />
+    </>
   );
 };
 

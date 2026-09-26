@@ -195,6 +195,29 @@ const EligibilityGate = ({ referralCode, onEligible }) => {
   );
 };
 
+const CompanyAlerts = () => {
+  const [data, setData] = useState(null);
+  useEffect(() => { api.get("/wa-alerts").then((r) => setData(r.data)).catch(() => {}); }, []);
+  if (!data?.alerts?.length) return null;
+  return (
+    <div className="rounded-xl border border-[#25D366]/40 bg-[#25D366]/5 p-4 mb-5" data-testid="company-wa-alerts">
+      <div className="flex items-center gap-2 mb-2">
+        <MessageCircle className="w-4 h-4 text-[#25D366]" />
+        <span className="font-heading font-bold text-sm text-[#25D366]">WhatsApp alerts sent to you</span>
+        {data.demo && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">DEMO</span>}
+      </div>
+      <div className="space-y-1.5">
+        {data.alerts.slice(0, 6).map((a, i) => (
+          <div key={i} className="flex items-center justify-between gap-3 text-xs" data-testid="company-wa-alert-row">
+            <span className="text-[#E7EAF0]">{a.message}</span>
+            <span className="text-[10px] text-[#8A8F9E] font-data shrink-0">{String(a.created_at).slice(0, 10)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const Matches = ({ browse = false, onChange }) => {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -220,6 +243,7 @@ export const Matches = ({ browse = false, onChange }) => {
   if (!res.role) return <Empty text="Complete a profile or requirement in the chat to see your matches." />;
 
   const alerts = !browse ? <MatchAlerts newCount={res.new_matches || 0} role={res.role} onSeen={load} /> : null;
+  const companyAlerts = res.role === "provider" && !browse ? <CompanyAlerts /> : null;
 
   // Provider view — candidate CVs with locked identity/contact
   if (res.role === "provider") {
@@ -227,6 +251,7 @@ export const Matches = ({ browse = false, onChange }) => {
       return (
         <>
           {alerts}
+          {companyAlerts}
           {res.near_matches?.length
             ? <NearMatches items={res.near_matches} role="provider" />
             : <Empty text="No matching candidates yet. Check back soon — new crew join daily." />}
@@ -235,6 +260,7 @@ export const Matches = ({ browse = false, onChange }) => {
     return (
       <>
         {alerts}
+        {companyAlerts}
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4" data-testid="matches-provider">
         {res.matches.map((c) => (
           <div key={c.id} className="rounded-xl border border-white/10 bg-[#0A0B12] p-5 flex flex-col" data-testid={`match-card-${c.id}`}>

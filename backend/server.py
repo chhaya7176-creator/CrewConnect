@@ -6,6 +6,7 @@ import os
 import io
 import re
 import json
+import asyncio
 import base64
 import logging
 from pathlib import Path
@@ -273,6 +274,8 @@ async def attribute_referral(ref_code: str, new_user_id: str):
     if ref_user.get("ref_signups", 0) >= SIGNUP_TARGET and not ref_user.get("ref_completed"):
         await db.users.update_one({"id": referrer_id}, {"$set": {"ref_completed": True}})
         await db.seekers.update_many({"user_id": referrer_id}, {"$set": {"boosted": True}})
+        for s in await db.seekers.find({"user_id": referrer_id}, {"_id": 0}).to_list(100):
+            await notify_companies_of_seeker(s)
 
 
 @api_router.post("/auth/verify-otp")
@@ -382,6 +385,32 @@ async def create_provider(req: ProviderRequirement, user=Depends(get_current_use
     doc["referral_code"] = uuid.uuid4().hex[:8]
     await db.providers.insert_one(dict(doc))
     doc.pop("_id", None)
+    await notify_company_of_boosted_matches(doc)
+    return doc
+
+
+@api_router.put("/seeker/profile/{profile_id}")
+async def update_seeker(profile_id: str, profile: SeekerProfile, user=Depends(get_current_user)):
+    existing = await db.seekers.find_one({"id": profile_id, "user_id": user["id"]}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    updates = profile.model_dump()
+    updates.pop("boosted", None)  # preserve promotion state across edits
+    await db.seekers.update_one({"id": profile_id}, {"$set": updates})
+    doc = await db.seekers.find_one({"id": profile_id}, {"_id": 0})
+    if doc.get("boosted"):
+        await notify_companies_of_seeker(doc)
+    return doc
+
+
+@api_router.put("/provider/requirement/{req_id}")
+async def update_provider(req_id: str, req: ProviderRequirement, user=Depends(get_current_user)):
+    existing = await db.providers.find_one({"id": req_id, "user_id": user["id"]}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Requirement not found")
+    await db.providers.update_one({"id": req_id}, {"$set": req.model_dump()})
+    doc = await db.providers.find_one({"id": req_id}, {"_id": 0})
+    await notify_company_of_boosted_matches(doc)
     return doc
 
 
@@ -457,6 +486,111 @@ def redact_seeker(seeker: dict, unlocked: bool) -> dict:
 
 def is_eligible(user: dict) -> bool:
     return bool(user.get("reg_paid") or user.get("ref_completed"))
+
+
+# ---------------- WhatsApp (Twilio) company alerts ----------------
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM")
+TWILIO_MESSAGING_SERVICE_SID = os.environ.get("TWILIO_MESSAGING_SERVICE_SID")
+TWILIO_CONTENT_SID = os.environ.get("TWILIO_CONTENT_SID")
+
+
+def twilio_enabled() -> bool:
+    return bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN
+                and (TWILIO_WHATSAPP_FROM or TWILIO_MESSAGING_SERVICE_SID))
+
+
+async def company_is_paying(user_id: str) -> bool:
+    """A company qualifies for proactive alerts once it is an engaged/paying customer:
+    it has unlocked at least one CV, made a paid unlock, or holds a subscription."""
+    u = await db.users.find_one({"id": user_id}, {"_id": 0}) or {}
+    if u.get("subscribed"):
+        return True
+    if await db.unlocks.count_documents({"user_id": user_id}) > 0:
+        return True
+    if await db.payments.count_documents({"user_id": user_id, "type": "cv_unlock"}) > 0:
+        return True
+    return False
+
+
+async def _twilio_send(to_e164: str, rank: str) -> dict:
+    body = f"A new matching {rank} is available on Smart Crewing."
+
+    def send_sync():
+        from twilio.rest import Client
+        c = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        kwargs = {"to": f"whatsapp:{to_e164}"}
+        if TWILIO_CONTENT_SID:
+            kwargs["content_sid"] = TWILIO_CONTENT_SID
+            kwargs["content_variables"] = json.dumps({"1": rank})
+        else:
+            kwargs["body"] = body
+        if TWILIO_MESSAGING_SERVICE_SID:
+            kwargs["messaging_service_sid"] = TWILIO_MESSAGING_SERVICE_SID
+        else:
+            kwargs["from_"] = TWILIO_WHATSAPP_FROM
+        return c.messages.create(**kwargs)
+
+    msg = await asyncio.to_thread(send_sync)
+    return {"status": getattr(msg, "status", "queued"), "sid": getattr(msg, "sid", None)}
+
+
+async def send_company_whatsapp_alert(*, company_user_id: str, to_mobile: str, rank: str,
+                                      company_name: str, seeker_id: str):
+    """Notify a paying company that a matching crew profile is now available.
+    Deduped per (company_user_id, seeker_id). Runs in DEMO mode (no send, no charge) until
+    Twilio credentials are configured, then sends via Twilio automatically."""
+    to_wa = to_e164(to_mobile)
+    if not to_wa:
+        return
+    if await db.wa_alerts.find_one({"company_user_id": company_user_id, "seeker_id": seeker_id}):
+        return
+    base = {"company_user_id": company_user_id, "seeker_id": seeker_id, "to": to_wa,
+            "rank": rank, "company_name": company_name, "kind": "matching_crew",
+            "message": f"A new matching {rank} is available on Smart Crewing.",
+            "created_at": datetime.now(timezone.utc).isoformat()}
+    if not twilio_enabled():
+        await db.wa_alerts.insert_one({**base, "status": "simulated", "mode": "demo"})
+        logger.info(f"WhatsApp DEMO alert -> {company_name} (matching {rank})")
+        return
+    try:
+        res = await _twilio_send(to_wa, rank)
+        await db.wa_alerts.insert_one({**base, "status": res["status"], "mode": "live", "sid": res["sid"]})
+    except Exception as e:
+        await db.wa_alerts.insert_one({**base, "status": "error", "mode": "live"})
+        logger.warning(f"Twilio WhatsApp send failed: {e}")
+
+
+async def notify_companies_of_seeker(seeker: dict):
+    """Trigger A: a seeker's profile just went live/boosted -> alert matching paying companies."""
+    if not seeker:
+        return
+    providers = await db.providers.find({}, {"_id": 0}).to_list(2000)
+    for p in providers:
+        if not matches_requirement(seeker, p):
+            continue
+        if not await company_is_paying(p["user_id"]):
+            continue
+        await send_company_whatsapp_alert(
+            company_user_id=p["user_id"], to_mobile=p.get("mobile", ""),
+            rank=seeker["rank"], company_name=p.get("company_name", "Company"),
+            seeker_id=seeker["id"])
+
+
+async def notify_company_of_boosted_matches(provider: dict):
+    """Trigger B: a company became paying or posted/edited a matching vacancy ->
+    alert that company about currently-available boosted crew."""
+    if not provider or not await company_is_paying(provider["user_id"]):
+        return
+    seekers = await db.seekers.find({"boosted": True}, {"_id": 0}).to_list(2000)
+    for s in seekers:
+        if not matches_requirement(s, provider):
+            continue
+        await send_company_whatsapp_alert(
+            company_user_id=provider["user_id"], to_mobile=provider.get("mobile", ""),
+            rank=s["rank"], company_name=provider.get("company_name", "Company"),
+            seeker_id=s["id"])
 
 
 def provider_card(p: dict, elig: bool) -> dict:
@@ -669,6 +803,10 @@ async def unlock_cv(req: UnlockRequest, user=Depends(get_current_user)):
     )
     if amount:
         await db.payments.insert_one({"user_id": user["id"], "type": "cv_unlock", "amount": amount, "at": now})
+    # Company is now an engaged/paying customer — alert it about currently-available boosted crew.
+    provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
+    if provider:
+        await notify_company_of_boosted_matches(provider)
     return {"success": True, "amount": amount, "free": amount == 0,
             "free_unlocks_left": max(0, FREE_UNLOCKS - (used + 1)), "cv": redact_seeker(seeker, True)}
 
@@ -681,6 +819,8 @@ async def boost_profile(user=Depends(get_current_user)):
     await db.seekers.update_one({"id": seeker["id"]}, {"$set": {"boosted": True}})
     await db.payments.insert_one({"user_id": user["id"], "type": "boost", "amount": 100,
                                   "at": datetime.now(timezone.utc).isoformat()})
+    fresh = await db.seekers.find_one({"id": seeker["id"]}, {"_id": 0})
+    await notify_companies_of_seeker(fresh)
     return {"success": True, "amount": 100, "boosted": True}
 
 
@@ -740,6 +880,8 @@ async def get_noticed_pay(user=Depends(get_current_user)):
     await db.seekers.update_many({"user_id": user["id"]}, {"$set": {"boosted": True}})
     await db.payments.insert_one({"user_id": user["id"], "type": "get_noticed_faster", "amount": 499,
                                   "at": datetime.now(timezone.utc).isoformat()})
+    for s in await db.seekers.find({"user_id": user["id"]}, {"_id": 0}).to_list(100):
+        await notify_companies_of_seeker(s)
     return {"success": True, "amount": 499, "eligible": True}
 
 
@@ -764,13 +906,21 @@ async def dashboard(user=Depends(get_current_user)):
     unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
     payments = await db.payments.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
     docs_count = await db.documents.count_documents({"user_id": user["id"], "is_deleted": False})
+    wa = await db.wa_alerts.find({"company_user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {
         "seeker_profiles": seekers,
         "provider_requirements": providers,
         "unlocks": unlocks,
         "payments": payments,
         "documents_count": docs_count,
+        "wa_alerts": wa,
     }
+
+
+@api_router.get("/wa-alerts")
+async def get_wa_alerts(user=Depends(get_current_user)):
+    rows = await db.wa_alerts.find({"company_user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"alerts": rows, "demo": not twilio_enabled()}
 
 
 @api_router.post("/feedback")
