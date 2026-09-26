@@ -13,6 +13,7 @@ import { formatDateInput } from "@/lib/formatDate";
 import { PhoneField } from "@/components/PhoneField";
 import { isValidPhoneNumber } from "react-phone-number-input";
 import { GetNoticedFaster } from "@/components/GetNoticedFaster";
+import { getRef } from "@/lib/referral";
 
 const uid = () => Math.random().toString(36).slice(2);
 
@@ -229,7 +230,7 @@ export const ChatFlow = () => {
     // OTP -> verify + login
     if (s.key === "otp") {
       try {
-        const res = await api.post("/auth/verify-otp", { mobile: form.mobile, otp: value, role });
+        const res = await api.post("/auth/verify-otp", { mobile: form.mobile, otp: value, role, ref: getRef() });
         login(res.data.token, res.data.user);
         toast.success("Mobile verified");
         advance(flow, idx);

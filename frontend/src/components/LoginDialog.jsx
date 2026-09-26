@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PhoneField } from "@/components/PhoneField";
+import { getRef } from "@/lib/referral";
 import { ShieldCheck } from "lucide-react";
 
 export const LoginDialog = ({ open, onOpenChange, onSuccess }) => {
@@ -32,7 +33,7 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }) => {
   const verify = async () => {
     setLoading(true);
     try {
-      const res = await api.post("/auth/verify-otp", { mobile, otp });
+      const res = await api.post("/auth/verify-otp", { mobile, otp, ref: getRef() });
       login(res.data.token, res.data.user);
       toast.success("Logged in successfully");
       onOpenChange(false);

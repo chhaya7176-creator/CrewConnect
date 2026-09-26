@@ -129,6 +129,10 @@ class OTPVerify(BaseModel):
     mobile: str
     otp: str
     role: Optional[str] = None
+    ref: Optional[str] = None  # referral code the new user signed up through
+
+
+SIGNUP_TARGET = 2  # real sign-ups through a referral link needed to auto-unlock the ₹499 boost
 
 
 class SummaryRequest(BaseModel):
@@ -253,6 +257,24 @@ async def request_otp(req: OTPRequest):
     return {"success": True, "demo_otp": otp, "message": "OTP sent (demo mode)"}
 
 
+async def attribute_referral(ref_code: str, new_user_id: str):
+    """Attribute a REAL new sign-up to the seafarer whose referral link was used.
+    Counts one sign-up per new user and auto-unlocks the referrer's ₹499 boost at the target."""
+    if not ref_code:
+        return
+    seeker = await db.seekers.find_one({"referral_code": ref_code}, {"_id": 0, "user_id": 1})
+    if not seeker:
+        return
+    referrer_id = seeker.get("user_id")
+    if not referrer_id or referrer_id == new_user_id:
+        return  # no self-referrals
+    await db.users.update_one({"id": referrer_id}, {"$inc": {"ref_signups": 1}})
+    ref_user = await db.users.find_one({"id": referrer_id}, {"_id": 0}) or {}
+    if ref_user.get("ref_signups", 0) >= SIGNUP_TARGET and not ref_user.get("ref_completed"):
+        await db.users.update_one({"id": referrer_id}, {"$set": {"ref_completed": True}})
+        await db.seekers.update_many({"user_id": referrer_id}, {"$set": {"boosted": True}})
+
+
 @api_router.post("/auth/verify-otp")
 async def verify_otp(req: OTPVerify):
     key = mobile_key(req.mobile)
@@ -270,7 +292,11 @@ async def verify_otp(req: OTPVerify):
             "mobile_key": key,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+        if req.ref:
+            user["referred_by"] = req.ref
         await db.users.insert_one(dict(user))
+        if req.ref:
+            await attribute_referral(req.ref, user["id"])
     elif not user.get("mobile_key"):
         await db.users.update_one({"id": user["id"]}, {"$set": {"mobile_key": key}})
         user["mobile_key"] = key
@@ -670,8 +696,8 @@ async def get_eligibility(user=Depends(get_current_user)):
         "eligible": bool(u.get("reg_paid") or u.get("ref_completed")),
         "reg_paid": bool(u.get("reg_paid")),
         "ref_completed": bool(u.get("ref_completed")),
-        "group_shares": u.get("ref_group_shares", 0),
-        "contact_shares": u.get("ref_contact_shares", 0),
+        "ref_signups": u.get("ref_signups", 0),
+        "signup_target": SIGNUP_TARGET,
     }
 
 

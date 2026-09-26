@@ -49,6 +49,11 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Removed ₹100 from all seafarer-facing UI incl. homepage HOW-IT-WORKS copy. cfg-race guard on chat role buttons.
 - **Merged visibility offer** (prior), brighter ship background, WhatsApp country-code fix, first-10-free-then-₹49 company unlocks, WhatsApp contact template.
 
+## Fixes (2026-06) — Referral Sign-up Rewards + Progress Ring
+- **Real referral tracking**: `?ref=<code>` is now captured on app load (`lib/referral.js` → `localStorage.mc_ref`) and sent with `verify-otp` (LoginDialog + ChatFlow). On a NEW user's first OTP verification, the sign-up is attributed to the referrer (`attribute_referral` matches seeker by `referral_code`). Referrer's `ref_signups` increments; at `SIGNUP_TARGET = 2` real sign-ups the ₹499 boost **auto-unlocks** (`ref_completed=True`, seekers `boosted=True`). Self-referral guarded. Click-based counting removed from the seafarer flow — only genuine sign-ups unlock.
+- **Share Progress Ring** (`ShareProgressRing.jsx`): circular SVG ring in the "Get noticed faster" card showing `ref_signups / target` with nudges — "You're 1 sign-up away 🎉" at N-1, glow + "Target reached — boost unlocked! 🎉" at target. Card polls `/eligibility` every 8s + on window focus, so progress/unlock update live as referred users join.
+- `/eligibility` now returns `ref_signups` + `signup_target`. Verified via curl (0→1→2 auto-unlock) and screenshots (ring at 1/2, desktop + mobile).
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

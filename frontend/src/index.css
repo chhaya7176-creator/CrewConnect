@@ -122,3 +122,10 @@ body {
   50% { transform: scale(1.14); box-shadow: 0 0 16px 3px rgba(223,255,0,0.6); }
 }
 .or-pulse { animation: orPulse 1.15s ease-in-out infinite; display: inline-block; }
+
+@keyframes ringGlow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(37,211,102,0.4)); }
+  50% { filter: drop-shadow(0 0 10px rgba(37,211,102,0.85)); }
+}
+.ring-glow { animation: ringGlow 1.6s ease-in-out infinite; }
+

@@ -5,6 +5,9 @@ import { AuthProvider } from "@/context/AuthContext";
 import Home from "@/pages/Home";
 import Dashboard from "@/pages/Dashboard";
 import AdminPage from "@/pages/AdminPage";
+import { captureRef } from "@/lib/referral";
+
+captureRef();
 
 function App() {
   return (

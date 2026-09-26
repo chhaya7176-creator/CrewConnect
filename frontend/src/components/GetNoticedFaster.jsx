@@ -4,9 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Rocket, Gift, Users, Share2, CheckCircle2, IndianRupee, Building2 } from "lucide-react";
-
-const GROUP_TARGET = 2;
-const CONTACT_TARGET = 20;
+import { ShareProgressRing } from "@/components/ShareProgressRing";
 
 export const GetNoticedFaster = ({ referralCode, onUnlocked }) => {
   const [elig, setElig] = useState(null);
@@ -14,29 +12,40 @@ export const GetNoticedFaster = ({ referralCode, onUnlocked }) => {
   const [busy, setBusy] = useState(false);
   const link = `${window.location.origin}/?ref=${referralCode || ""}`;
 
-  const load = () => api.get("/eligibility").then((r) => setElig(r.data)).catch(() => {});
-  useEffect(() => { load(); }, []);
+  const load = async () => {
+    try {
+      const r = await api.get("/eligibility");
+      setElig((prev) => {
+        if (r.data.eligible && !prev?.eligible) onUnlocked?.();
+        return r.data;
+      });
+    } catch { /* ignore */ }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+
+  // Poll for real sign-ups arriving through the referral link (auto-unlocks server-side at target).
   useEffect(() => {
-    if (elig?.eligible) api.get("/promoted-companies").then((r) => setCompanies(r.data.companies || [])).catch(() => {});
+    if (elig?.eligible) return;
+    const iv = setInterval(load, 8000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => { clearInterval(iv); window.removeEventListener("focus", onFocus); };
+    // eslint-disable-next-line
   }, [elig?.eligible]);
 
-  const claimIfReady = async (s) => {
-    if ((s.group_shares || 0) >= GROUP_TARGET || (s.contact_shares || 0) >= CONTACT_TARGET) {
-      try {
-        await api.post("/referral/claim");
-        toast.success("Unlocked! Your profile is now promoted 🎉");
-        load();
-        onUnlocked?.();
-      } catch { /* not enough yet */ }
+  useEffect(() => {
+    if (elig?.eligible) {
+      api.get("/promoted-companies").then((r) => setCompanies(r.data.companies || [])).catch(() => {});
     }
-  };
+  }, [elig?.eligible]);
 
-  const share = async (type) => {
-    let s = elig;
-    try { const r = await api.post("/referral/share", { type }); s = r.data; setElig((e) => ({ ...(e || {}), ...r.data })); } catch { /* ignore */ }
+  const share = (type) => {
     const text = `Join me on Smart Crewing — get matched with shipping jobs fast! ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-    claimIfReady(s);
+  };
+
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(link); toast.success("Referral link copied"); } catch { /* ignore */ }
   };
 
   const pay = async () => {
@@ -45,18 +54,16 @@ export const GetNoticedFaster = ({ referralCode, onUnlocked }) => {
       await api.post("/get-noticed/pay");
       toast.success("Boosted! You're now promoted (₹499 — demo)");
       load();
-      onUnlocked?.();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Payment failed");
     } finally { setBusy(false); }
   };
 
   if (!elig) return null;
-  const g = elig.group_shares || 0, c = elig.contact_shares || 0;
 
   if (elig.eligible) {
     return (
-      <div className="rounded-2xl border border-[#25D366]/40 bg-[#25D366]/5 p-5" data-testid="get-noticed-active">
+      <div className="rounded-2xl border border-[#25D366]/40 bg-[#25D366]/5 p-5 mb-6" data-testid="get-noticed-active">
         <div className="flex items-center gap-2 mb-1">
           <Rocket className="w-5 h-5 text-[#25D366]" />
           <h3 className="font-heading font-extrabold text-lg text-[#25D366]">Get Noticed Faster is active</h3>
@@ -83,8 +90,11 @@ export const GetNoticedFaster = ({ referralCode, onUnlocked }) => {
     );
   }
 
+  const signups = elig.ref_signups || 0;
+  const target = elig.signup_target || 2;
+
   return (
-    <div className="rounded-2xl border border-[#0066FF]/40 bg-gradient-to-br from-[#0066FF]/10 to-transparent p-5 sm:p-6" data-testid="get-noticed-faster">
+    <div className="rounded-2xl border border-[#0066FF]/40 bg-gradient-to-br from-[#0066FF]/10 to-transparent p-5 sm:p-6 mb-6" data-testid="get-noticed-faster">
       <div className="flex items-center gap-2 mb-2">
         <Rocket className="w-5 h-5 text-[#FF5A00]" />
         <h3 className="font-heading font-extrabold text-xl text-white">Get noticed faster</h3>
@@ -109,19 +119,20 @@ export const GetNoticedFaster = ({ referralCode, onUnlocked }) => {
         <div className="h-px flex-1 bg-white/15" />
       </div>
 
-      {/* Option 2 — Share (prominent, pulsing) */}
+      {/* Option 2 — Share for free, unlocked by REAL sign-ups */}
       <div className="pulse-cta rounded-xl border-2 border-[#25D366]/70 bg-[#25D366]/10 p-4" data-testid="gnf-share-section">
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <Gift className="w-5 h-5 text-[#25D366]" />
           <span className="font-heading font-extrabold text-lg text-[#25D366]">Simply Share to get noticed faster</span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">RECOMMENDED</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">FREE</span>
         </div>
-        <p className="text-xs text-[#C9CFDA] mb-3">Share your link with <b className="text-white">{GROUP_TARGET} WhatsApp shipping groups</b> OR <b className="text-white">{CONTACT_TARGET} contacts</b> — auto-unlocks when you hit the target.</p>
-        <div className="flex gap-2 mb-3">
-          <div className="flex-1 text-center rounded-lg bg-black/30 border border-white/10 py-2"><div className="font-data text-lg">{g}/{GROUP_TARGET}</div><div className="text-[10px] text-[#8A8F9E]">Groups</div></div>
-          <div className="flex-1 text-center rounded-lg bg-black/30 border border-white/10 py-2"><div className="font-data text-lg">{c}/{CONTACT_TARGET}</div><div className="text-[10px] text-[#8A8F9E]">Contacts</div></div>
+        <p className="text-xs text-[#C9CFDA] mb-4">Share your link — it auto-unlocks for free once <b className="text-white">{target} people sign up</b> through it. Progress updates automatically as they join.</p>
+
+        <div className="flex justify-center mb-4">
+          <ShareProgressRing current={signups} target={target} />
         </div>
-        <Input readOnly value={link} className="bg-black/40 border-white/10 font-data text-xs mb-3" data-testid="gnf-referral-link" />
+
+        <Input readOnly value={link} onClick={copyLink} className="bg-black/40 border-white/10 font-data text-xs mb-3 cursor-pointer" data-testid="gnf-referral-link" />
         <div className="flex gap-2">
           <Button size="sm" className="flex-1 bg-[#25D366] hover:bg-[#1da851] text-black font-semibold gap-1 rounded-full" onClick={() => share("group")} data-testid="gnf-share-group-btn"><Users className="w-3.5 h-3.5" /> Share to group</Button>
           <Button size="sm" variant="outline" className="flex-1 border-[#25D366]/40 bg-transparent hover:bg-[#25D366]/10 text-[#25D366] gap-1 rounded-full" onClick={() => share("contact")} data-testid="gnf-share-contact-btn"><Share2 className="w-3.5 h-3.5" /> Send to contact</Button>
