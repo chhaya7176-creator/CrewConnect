@@ -21,13 +21,14 @@ const buildSeekerSteps = (cfg) => [
   { key: "rank", bot: "What is your professional rank?", type: "dropdown", options: cfg.ranks },
   { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
+  { key: "dob", bot: "What is your date of birth? (DD/MM/YYYY) — Smart Crewing is for users aged 18 and above.", type: "text", format: "date", placeholder: "DD/MM/YYYY" },
   { key: "cv_upload", bot: "Great! Please upload your CV / biodata now — PDF, Word or a photo (even handwritten). This saves your profile right away, even if you stop midway. You can also skip and upload it later.", type: "upload", optional: true },
   { key: "vessel_type", bot: "Which vessel type do you prefer to work on?", type: "dropdown", options: cfg.vessel_types },
   { key: "sea_time", bot: "How much sea time do you have (in months)?", type: "quick", options: cfg.sea_time },
   { key: "coc", bot: "Which country/authority issued your Certificate / License / COC?", type: "dropdown", options: cfg.coc_seeker },
   { key: "us_visa", bot: "What is your US Visa status?", type: "quick", options: cfg.us_visa_seeker },
   { key: "other_visa", bot: "Any other visa details? e.g. Schengen, UK. (Optional)", type: "text", optional: true, placeholder: "Type details or press Skip" },
-  { key: "consent", bot: "Do you agree to share your details with relevant employers?", type: "quick", options: ["Yes", "No"] },
+  { key: "consent", bot: "We'll use your rank, experience, certificates, availability and contact details <b>only</b> to match you with shipping employers and notify you of jobs. You can withdraw consent and request deletion anytime (see Privacy Policy). Do you consent?", type: "quick", options: ["Yes", "No"] },
   { key: "name", bot: "Great! What is your full name?", type: "text", placeholder: "Full name" },
   { key: "email", bot: "Your email ID for job notifications?", type: "text", placeholder: "you@example.com" },
   { key: "availability", bot: "When are you available to join?", type: "quick", options: ["Immediate", "Custom date"] },
@@ -43,7 +44,8 @@ const buildProviderSteps = (cfg) => [
   { key: "us_visa", bot: "US Visa requirement for this role?", type: "quick", options: cfg.us_visa_provider },
   { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
-  { key: "consent", bot: "Do you agree to share your requirement with relevant seafarers?", type: "quick", options: ["Yes", "No"] },
+  { key: "dob", bot: "What is your date of birth? (DD/MM/YYYY) — Smart Crewing is for users aged 18 and above.", type: "text", format: "date", placeholder: "DD/MM/YYYY" },
+  { key: "consent", bot: "We'll use your company &amp; requirement details <b>only</b> to match you with relevant seafarers and notify them. You can withdraw consent and request deletion anytime (see Privacy Policy). Do you consent?", type: "quick", options: ["Yes", "No"] },
   { key: "company_name", bot: "What is your company name?", type: "text", placeholder: "Company name" },
   { key: "email", bot: "Company email for candidate notifications?", type: "text", placeholder: "crewing@company.com" },
   { key: "availability", bot: "Required joining timeline?", type: "quick", options: ["Immediate", "Custom date"] },
@@ -256,6 +258,17 @@ export const ChatFlow = () => {
         advance(flow, idx);
       } catch (e) {
         addBot("⚠️ " + (e.response?.data?.detail || "Invalid OTP, try again."));
+      }
+      return;
+    }
+
+    // date of birth -> verify 18+ via backend
+    if (s.key === "dob") {
+      try {
+        await api.post("/me/dob", { dob: value });
+        advance(flow, idx);
+      } catch (e) {
+        addBot("⚠️ " + (e.response?.data?.detail || "Please enter a valid date (DD/MM/YYYY). You must be 18 or older to use Smart Crewing."));
       }
       return;
     }

@@ -6,7 +6,7 @@ import { CVEditor } from "@/components/CVEditor";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, Building2, FileText, FileScan, MessageSquare, Ship, ChevronRight, ShieldCheck, ArrowLeft } from "lucide-react";
+import { Users, Building2, FileText, FileScan, MessageSquare, Ship, ChevronRight, ShieldCheck, ArrowLeft, Trash2 } from "lucide-react";
 
 export default function AdminPage() {
   const { user, loading } = useAuth();
@@ -14,6 +14,7 @@ export default function AdminPage() {
   const [stats, setStats] = useState(null);
   const [cvs, setCvs] = useState([]);
   const [feedback, setFeedback] = useState([]);
+  const [deletion, setDeletion] = useState([]);
   const [view, setView] = useState("cvs");
   const [selected, setSelected] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -22,6 +23,7 @@ export default function AdminPage() {
     api.get("/admin/stats").then((r) => setStats(r.data)).catch(() => {});
     api.get("/admin/cvs").then((r) => setCvs(r.data)).catch(() => {});
     api.get("/admin/feedback").then((r) => setFeedback(r.data)).catch(() => {});
+    api.get("/admin/deletion-requests").then((r) => setDeletion(r.data.requests || [])).catch(() => {});
   };
 
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function AdminPage() {
     { icon: FileText, label: "Documents", value: stats.documents },
     { icon: FileScan, label: "Parsed CVs", value: stats.parsed_cvs },
     { icon: MessageSquare, label: "Feedback", value: stats.feedback },
+    { icon: Trash2, label: "Deletion Reqs", value: stats.deletion_requests ?? 0 },
   ] : [];
 
   return (
@@ -90,6 +93,13 @@ export default function AdminPage() {
               data-testid="admin-view-feedback"
             >
               Feedback ({feedback.length})
+            </button>
+            <button
+              onClick={() => setView("deletion")}
+              className={`px-4 py-2 rounded-full text-sm border transition-colors ${view === "deletion" ? "bg-[#ef4444] border-[#ef4444] text-white" : "border-white/10 text-[#8A8F9E] hover:text-white"}`}
+              data-testid="admin-view-deletion"
+            >
+              Deletion Requests ({deletion.length})
             </button>
           </div>
         )}
@@ -150,6 +160,36 @@ export default function AdminPage() {
                           <span className="text-[11px] font-data text-[#8A8F9E]">{f.mobile} · {f.created_at ? new Date(f.created_at).toLocaleString() : ""}</span>
                         </div>
                         <p className="text-sm text-[#F3F4F6]">{f.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {view === "deletion" && (
+              <div data-testid="admin-deletion-list">
+                <div className="flex items-center gap-2 mb-1">
+                  <Trash2 className="w-4 h-4 text-[#ff6b6b]" />
+                  <h3 className="font-heading font-bold text-lg">Requested for deletion under DPDP ({deletion.length})</h3>
+                </div>
+                <p className="text-xs text-[#8A8F9E] mb-4">These accounts requested erasure. Their data is hidden from all listings and accessible only here, pending removal.</p>
+                {deletion.length === 0 ? (
+                  <div className="text-center py-16 text-[#8A8F9E] text-sm border border-dashed border-white/10 rounded-xl">No deletion requests.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {deletion.map((d, i) => (
+                      <div key={i} className="rounded-xl border border-[#ef4444]/30 bg-[#ef4444]/5 p-4" data-testid="admin-deletion-row">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <span className="font-data text-sm text-white">{d.mobile}</span>
+                          <span className="text-[11px] font-data text-[#8A8F9E]">Requested {d.requested_at ? new Date(d.requested_at).toLocaleString() : ""}</span>
+                        </div>
+                        <div className="text-xs text-[#8A8F9E]">
+                          {(d.profiles?.length ? d.profiles : d.requirements || []).map((p, j) => (
+                            <span key={j} className="inline-block mr-2">{p.name || p.company_name} · {p.rank} · {p.vessel_type}</span>
+                          ))}
+                          <span className="inline-block">· {d.documents_count || 0} document(s)</span>
+                        </div>
                       </div>
                     ))}
                   </div>

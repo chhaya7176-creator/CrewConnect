@@ -24,6 +24,7 @@ export const Navbar = ({ onLogin }) => {
         </Link>
 
         <div className="flex items-center gap-2">
+          <Link to="/privacy" className="text-xs text-[#8A8F9E] hover:text-white transition-colors mr-1 hidden sm:inline" data-testid="nav-privacy-link">Privacy</Link>
           {user ? (
             <>
               {user.is_admin && (

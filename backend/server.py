@@ -28,6 +28,15 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'dev_secret')
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
 ADMIN_MOBILES = [m.strip() for m in os.environ.get('ADMIN_MOBILES', '').split(',') if m.strip()]
 
+# ---------------- DPDP (India Digital Personal Data Protection Act) ----------------
+ACTIVE_FILTER = {"deletion_requested": {"$ne": True}}  # exclude records with a pending DPDP deletion request
+DPDP_CONSENT_VERSION = "1.0"
+GRIEVANCE_OFFICER = {
+    "name": "Gyanindra Mishra",
+    "email": "gyanindramishra@gmail.com",
+    "role": "Grievance Officer / Data Protection Contact",
+}
+
 # ---------------- Object storage ----------------
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
@@ -118,6 +127,8 @@ async def get_config():
         "coc_provider": COC_PROVIDER,
         "us_visa_seeker": US_VISA_SEEKER,
         "us_visa_provider": US_VISA_PROVIDER,
+        "grievance_officer": GRIEVANCE_OFFICER,
+        "consent_version": DPDP_CONSENT_VERSION,
     }
 
 
@@ -372,6 +383,9 @@ async def create_seeker(profile: SeekerProfile, user=Depends(get_current_user)):
     doc["referral_code"] = uuid.uuid4().hex[:8]
     await db.seekers.insert_one(dict(doc))
     doc.pop("_id", None)
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "consent_given": bool(profile.consent), "consent_at": datetime.now(timezone.utc).isoformat(),
+        "consent_version": DPDP_CONSENT_VERSION}})
     return doc
 
 
@@ -385,6 +399,9 @@ async def create_provider(req: ProviderRequirement, user=Depends(get_current_use
     doc["referral_code"] = uuid.uuid4().hex[:8]
     await db.providers.insert_one(dict(doc))
     doc.pop("_id", None)
+    await db.users.update_one({"id": user["id"]}, {"$set": {
+        "consent_given": bool(req.consent), "consent_at": datetime.now(timezone.utc).isoformat(),
+        "consent_version": DPDP_CONSENT_VERSION}})
     await notify_company_of_boosted_matches(doc)
     return doc
 
@@ -566,7 +583,7 @@ async def notify_companies_of_seeker(seeker: dict):
     """Trigger A: a seeker's profile just went live/boosted -> alert matching paying companies."""
     if not seeker:
         return
-    providers = await db.providers.find({}, {"_id": 0}).to_list(2000)
+    providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
     for p in providers:
         if not matches_requirement(seeker, p):
             continue
@@ -583,7 +600,7 @@ async def notify_company_of_boosted_matches(provider: dict):
     alert that company about currently-available boosted crew."""
     if not provider or not await company_is_paying(provider["user_id"]):
         return
-    seekers = await db.seekers.find({"boosted": True}, {"_id": 0}).to_list(2000)
+    seekers = await db.seekers.find({"boosted": True, **ACTIVE_FILTER}, {"_id": 0}).to_list(2000)
     for s in seekers:
         if not matches_requirement(s, provider):
             continue
@@ -624,7 +641,7 @@ async def get_matches(user=Depends(get_current_user)):
         result["role"] = "provider"
         unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
         unlocked_ids = {u["seeker_id"] for u in unlocks}
-        seekers = await db.seekers.find({}, {"_id": 0}).to_list(1000)
+        seekers = await db.seekers.find(ACTIVE_FILTER, {"_id": 0}).to_list(1000)
         matched, near = [], []
         for s in seekers:
             if matches_requirement(s, provider):
@@ -645,7 +662,7 @@ async def get_matches(user=Depends(get_current_user)):
         result["role"] = "seeker"
         elig = is_eligible(user)
         result["eligible"] = elig
-        providers = await db.providers.find({}, {"_id": 0}).to_list(1000)
+        providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(1000)
         matched, near = [], []
         for p in providers:
             if matches_requirement(seeker, p):
@@ -715,7 +732,7 @@ async def create_saved_search(body: SavedSearchIn, user=Depends(get_current_user
 @api_router.get("/saved-searches")
 async def list_saved_searches(user=Depends(get_current_user)):
     searches = await db.saved_searches.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    seekers = await db.seekers.find({}, {"_id": 0}).to_list(1000)
+    seekers = await db.seekers.find(ACTIVE_FILTER, {"_id": 0}).to_list(1000)
     out = []
     for s in searches:
         req = _search_req(s["criteria"])
@@ -734,7 +751,7 @@ async def saved_search_results(sid: str, user=Depends(get_current_user)):
     unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
     unlocked_ids = {u["seeker_id"] for u in unlocks}
     req = _search_req(s["criteria"])
-    seekers = await db.seekers.find({}, {"_id": 0}).to_list(1000)
+    seekers = await db.seekers.find(ACTIVE_FILTER, {"_id": 0}).to_list(1000)
     matched = [k for k in seekers if matches_requirement(k, req)]
     matched.sort(key=lambda k: k.get("created_at", ""), reverse=True)  # newest first
     seen_at = s.get("last_viewed_at") or ""
@@ -762,7 +779,7 @@ async def browse_all(user=Depends(get_current_user)):
         result["role"] = "provider"
         unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
         unlocked_ids = {u["seeker_id"] for u in unlocks}
-        seekers = await db.seekers.find({}, {"_id": 0}).to_list(2000)
+        seekers = await db.seekers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
         seekers.sort(key=lambda s: (not s.get("boosted", False), s.get("created_at", "")))
         result["matches"] = [redact_seeker(s, s["id"] in unlocked_ids) for s in seekers]
         result["free_unlocks_left"] = max(0, FREE_UNLOCKS - len(unlocks))
@@ -771,7 +788,7 @@ async def browse_all(user=Depends(get_current_user)):
         result["role"] = "seeker"
         elig = is_eligible(user)
         result["eligible"] = elig
-        providers = await db.providers.find({}, {"_id": 0}).to_list(2000)
+        providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
         result["matches"] = [provider_card(p, elig) for p in providers]
     return result
 
@@ -892,7 +909,7 @@ async def promoted_companies(user=Depends(get_current_user)):
     seeker = await db.seekers.find_one({"user_id": user["id"]}, {"_id": 0})
     if not eligible or not seeker:
         return {"eligible": eligible, "companies": [], "count": 0}
-    providers = await db.providers.find({}, {"_id": 0}).to_list(1000)
+    providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(1000)
     matched = [p for p in providers if matches_requirement(seeker, p)]
     companies = [{"company_name": p.get("company_name"), "rank": p.get("rank"),
                   "vessel_type": p.get("vessel_type"), "shared_at": p.get("created_at", "")} for p in matched]
@@ -921,6 +938,89 @@ async def dashboard(user=Depends(get_current_user)):
 async def get_wa_alerts(user=Depends(get_current_user)):
     rows = await db.wa_alerts.find({"company_user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"alerts": rows, "demo": not twilio_enabled()}
+
+
+# ---------------- DPDP data rights ----------------
+class DobIn(BaseModel):
+    dob: str  # DD/MM/YYYY
+
+
+def _compute_age(dob: str):
+    m = re.match(r"^\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})\s*$", dob or "")
+    if not m:
+        return None
+    d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        birth = datetime(y, mo, d, tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    today = datetime.now(timezone.utc)
+    return today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
+
+
+@api_router.post("/me/dob")
+async def set_dob(body: DobIn, user=Depends(get_current_user)):
+    age = _compute_age(body.dob)
+    if age is None or age < 0 or age > 120:
+        raise HTTPException(status_code=400, detail="Please enter a valid date (DD/MM/YYYY).")
+    if age < 18:
+        raise HTTPException(status_code=403, detail="You must be 18 or older to use Smart Crewing.")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"dob": body.dob, "is_adult": True}})
+    return {"ok": True, "age": age}
+
+
+@api_router.get("/me/export")
+async def export_my_data(user=Depends(get_current_user)):
+    """DPDP right to access — a machine-readable copy of the user's personal data."""
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or {}
+    seekers = await db.seekers.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
+    providers = await db.providers.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
+    documents = await db.documents.find({"user_id": user["id"], "is_deleted": False}, {"_id": 0, "data": 0}).to_list(200)
+    unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
+    payments = await db.payments.find({"user_id": user["id"]}, {"_id": 0}).to_list(500)
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "account": {"mobile": u.get("mobile"), "role": u.get("role"), "dob": u.get("dob"),
+                    "consent_given": u.get("consent_given"), "consent_at": u.get("consent_at"),
+                    "consent_version": u.get("consent_version")},
+        "profiles": seekers, "requirements": providers, "documents": documents,
+        "unlocks": unlocks, "payments": payments,
+    }
+
+
+@api_router.post("/me/request-deletion")
+async def request_deletion(user=Depends(get_current_user)):
+    """DPDP right to erasure — records are withdrawn from all public listings and moved to an
+    admin-only 'Requested for deletion under DPDP' folder (not hard-deleted)."""
+    now = datetime.now(timezone.utc).isoformat()
+    flag = {"deletion_requested": True, "deletion_requested_at": now}
+    await db.users.update_one({"id": user["id"]}, {"$set": flag})
+    await db.seekers.update_many({"user_id": user["id"]}, {"$set": flag})
+    await db.providers.update_many({"user_id": user["id"]}, {"$set": flag})
+    await db.documents.update_many({"user_id": user["id"]}, {"$set": flag})
+    await db.deletion_requests.update_one(
+        {"user_id": user["id"]},
+        {"$set": {"user_id": user["id"], "mobile": user.get("mobile"), "requested_at": now}},
+        upsert=True)
+    return {"ok": True, "folder": "Requested for deletion under DPDP"}
+
+
+@api_router.get("/grievance")
+async def grievance():
+    return {"grievance_officer": GRIEVANCE_OFFICER, "consent_version": DPDP_CONSENT_VERSION}
+
+
+@api_router.get("/admin/deletion-requests")
+async def admin_deletion_requests(admin=Depends(require_admin)):
+    users = await db.users.find({"deletion_requested": True}, {"_id": 0}).sort("deletion_requested_at", -1).to_list(500)
+    out = []
+    for u in users:
+        seekers = await db.seekers.find({"user_id": u["id"]}, {"_id": 0}).to_list(50)
+        providers = await db.providers.find({"user_id": u["id"]}, {"_id": 0}).to_list(50)
+        docs = await db.documents.count_documents({"user_id": u["id"]})
+        out.append({"mobile": u.get("mobile"), "requested_at": u.get("deletion_requested_at"),
+                    "profiles": seekers, "requirements": providers, "documents_count": docs})
+    return {"folder": "Requested for deletion under DPDP", "count": len(out), "requests": out}
 
 
 @api_router.post("/feedback")
@@ -1458,6 +1558,7 @@ async def admin_stats(admin=Depends(require_admin)):
         "documents": await db.documents.count_documents({"is_deleted": False}),
         "parsed_cvs": await db.parsed_cvs.count_documents({}),
         "feedback": await db.feedback.count_documents({}),
+        "deletion_requests": await db.users.count_documents({"deletion_requested": True}),
     }
 
 

@@ -61,6 +61,14 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 ## Fixes (2026-06) — In-flow answer correction
 - **"Correct last answer" in chat** (`ChatFlow.jsx`): a subtle link above the input lets users step back one question and re-answer if they picked a wrong value while filling. Removes the mistaken answer bubble + re-shows that question. Guarded so OTP/mobile verification is never undone (after OTP it won't re-enter auth steps). Complements the Review-step summary edit and the post-submit My Posts → Edit. Verified via screenshot (seeker rank → mobile → back → rank re-asked, answer cleared).
 
+## Fixes (2026-06) — DPDP (India Digital Personal Data Protection Act) essentials
+- **Privacy Policy + Grievance Officer**: `/privacy` page (`PrivacyPolicy.jsx`) with notice, purpose limitation, data-principal rights, retention, 18+ and grievance contact (from `GET /api/grievance` → gyanindramishra@gmail.com). Navbar "Privacy" link.
+- **Consent notice**: chat consent step reworded to an itemised DPDP notice (purpose + withdrawal + privacy link); consent stamped on the user (`consent_given/at/version`) at profile/requirement submit.
+- **Age 18+**: DOB captured right after OTP in the chat (`/me/dob`, server-side 18+ gate → 403 if under-18).
+- **Right to access**: `GET /api/me/export` → downloadable JSON (Dashboard → Support → Privacy & Data → "Download my data").
+- **Right to erasure**: `POST /api/me/request-deletion` flags user+seekers+providers+documents `deletion_requested=true`; `ACTIVE_FILTER` excludes them from ALL public listings (matches, browse, saved-search, promoted-companies, WA-alert scans). Records are NOT hard-deleted — visible only to admin under `GET /api/admin/deletion-requests` ("Requested for deletion under DPDP" folder; admin console has a Deletion Requests view + stat).
+- Verified via curl (18+ gate, export, deletion hides from browse, admin folder) + screenshots (privacy page desktop/mobile, DataRights, in-chat DOB step). No changes cost data; WhatsApp still demo mode.
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

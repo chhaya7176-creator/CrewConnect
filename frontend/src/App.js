@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import Home from "@/pages/Home";
 import Dashboard from "@/pages/Dashboard";
 import AdminPage from "@/pages/AdminPage";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import { captureRef } from "@/lib/referral";
 
 captureRef();
@@ -18,6 +19,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
           </Routes>
         </BrowserRouter>
         <Toaster position="top-center" theme="dark" richColors />

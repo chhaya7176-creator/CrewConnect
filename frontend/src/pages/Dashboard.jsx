@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList, Bookmark, Pencil } from "lucide-react";
 import { EditPostDialog } from "@/components/EditPostDialog";
+import { DataRights } from "@/components/DataRights";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -138,8 +139,9 @@ export default function Dashboard() {
           <TabsContent value="history" className="mt-6">
             <HistoryView data={data} />
           </TabsContent>
-          <TabsContent value="support" className="mt-6">
+          <TabsContent value="support" className="mt-6 space-y-6">
             <FeedbackCard />
+            <DataRights />
           </TabsContent>
         </Tabs>
       </div>
