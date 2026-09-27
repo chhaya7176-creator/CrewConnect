@@ -73,8 +73,20 @@ export default function Home() {
         </div>
 
         {/* Right: chat */}
-        <div className="order-1 lg:order-2 h-[560px] lg:h-[calc(100vh-140px)] lg:sticky lg:top-24">
-          <ChatFlow />
+        <div className="order-1 lg:order-2 lg:sticky lg:top-24">
+          <div className="flex items-center justify-between gap-2 mb-2 px-1">
+            <span className="text-xs text-[#c9d3df] drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">New here? Chat below to get started.</span>
+            <button
+              onClick={() => setLoginOpen(true)}
+              className="text-xs font-semibold text-[#FF7A2E] hover:text-[#FF5A00] transition-colors inline-flex items-center gap-1 whitespace-nowrap"
+              data-testid="home-returning-login"
+            >
+              Already registered? Log in
+            </button>
+          </div>
+          <div className="h-[540px] lg:h-[calc(100vh-172px)]">
+            <ChatFlow />
+          </div>
         </div>
       </div>
     </div>
