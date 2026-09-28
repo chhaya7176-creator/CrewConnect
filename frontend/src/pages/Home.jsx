@@ -75,10 +75,10 @@ export default function Home() {
         {/* Right: chat */}
         <div className="order-1 lg:order-2 lg:sticky lg:top-24">
           <div className="flex items-center justify-between gap-2 mb-2 px-1">
-            <span className="text-xs font-semibold text-[#FF7A2E] drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">New here? Chat below to get started.</span>
+            <span className="text-xs font-light text-[#FF7A2E] drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">New here? Chat below to get started.</span>
             <button
               onClick={() => setLoginOpen(true)}
-              className="text-xs font-light text-[#FF7A2E] hover:text-[#FF5A00] transition-colors inline-flex items-center gap-1 whitespace-nowrap"
+              className="text-xs font-light text-[#FF7A2E] hover:text-[#FF5A00] transition-colors inline-flex items-center gap-1 whitespace-nowrap drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]"
               data-testid="home-returning-login"
             >
               Already registered? Log in
