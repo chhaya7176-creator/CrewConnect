@@ -17,6 +17,14 @@ import { getRef } from "@/lib/referral";
 
 const uid = () => Math.random().toString(36).slice(2);
 
+// Local fallback so the review step always shows an editable summary, even if the AI call is slow/unavailable.
+const localSummary = (role, d = {}) => {
+  const coc = Array.isArray(d.coc) ? d.coc.join(", ") : d.coc;
+  if (role === "seeker")
+    return `${d.rank || "Seafarer"} with ${d.sea_time || ""} of sea time on ${d.vessel_type || ""} vessels. COC: ${coc || "—"}. US Visa: ${d.us_visa || "—"}. Available from ${d.availability || "—"}.`.replace(/\s+/g, " ").trim();
+  return `Seeking a ${d.rank || "crew"} for ${d.vessel_type || ""} vessels with ${d.sea_time || ""} experience. Preferred COC: ${coc || "—"}. US Visa: ${d.us_visa || "—"}. Joining: ${d.availability || "—"}.`.replace(/\s+/g, " ").trim();
+};
+
 const buildSeekerSteps = (cfg) => [
   { key: "rank", bot: "What is your professional rank?", type: "dropdown", options: cfg.ranks },
   { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
@@ -138,9 +146,9 @@ export const ChatFlow = () => {
     setLoadingSummary(true);
     try {
       const res = await api.post("/ai/summary", { role, data });
-      setSummary(res.data.summary);
+      setSummary(res.data.summary || localSummary(role, data));
     } catch {
-      setSummary("Profile summary unavailable.");
+      setSummary(localSummary(role, data));
     } finally {
       setLoadingSummary(false);
     }

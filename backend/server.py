@@ -346,7 +346,7 @@ async def generate_ai_summary(role: str, data: dict) -> str:
                    "timeline. Do not invent facts. Keep under 60 words.")
         chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=str(uuid.uuid4()), system_message=sys).with_model("openai", "gpt-5.4")
         msg = UserMessage(text=f"Data: {data}")
-        resp = await chat.send_message(msg)
+        resp = await asyncio.wait_for(chat.send_message(msg), timeout=12)
         text = resp if isinstance(resp, str) else str(resp)
         return text.strip() or fallback
     except Exception as e:
