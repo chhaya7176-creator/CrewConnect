@@ -23,7 +23,7 @@ export const CompanyPlan = () => {
 
   const subscribe = async () => {
     setBusy(true);
-    try { await payFor("subscription"); toast.success("Annual plan active 🎉"); load(); }
+    try { await payFor("subscription"); toast.success("Annual plan active 🎉"); load(); window.dispatchEvent(new Event("mc-status-changed")); }
     catch (e) { toast.error(e.message || "Payment cancelled"); }
     finally { setBusy(false); }
   };

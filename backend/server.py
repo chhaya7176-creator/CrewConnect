@@ -642,6 +642,9 @@ def provider_card(p: dict, elig: bool) -> dict:
         "availability": p["availability"],
         "availability_priority": p.get("availability_priority", "Preferred"),
         "summary": p.get("summary", ""),
+        "vessel_name": p.get("vessel_name", ""),
+        "port": p.get("port", ""),
+        "audits": p.get("audits") or [],
     }
 
 

@@ -69,6 +69,13 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - **Right to erasure**: `POST /api/me/request-deletion` flags user+seekers+providers+documents `deletion_requested=true`; `ACTIVE_FILTER` excludes them from ALL public listings (matches, browse, saved-search, promoted-companies, WA-alert scans). Records are NOT hard-deleted — visible only to admin under `GET /api/admin/deletion-requests` ("Requested for deletion under DPDP" folder; admin console has a Deletion Requests view + stat).
 - Verified via curl (18+ gate, export, deletion hides from browse, admin folder) + screenshots (privacy page desktop/mobile, DataRights, in-chat DOB step). No changes cost data; WhatsApp still demo mode.
 
+## Fixes (2026-06) — Company (job-giver) flow overhaul + Razorpay
+- **Unlock pricing:** first **5 matched CVs free**, then **₹29** per profile (removed the old 10-free/₹49 tier). Subscribed companies unlock free. `/unlock-cv` returns `needs_payment` when a ₹29 charge is due; client runs payment then `/pay/verify` completes it.
+- **Razorpay/UPI payments** (`lib/pay.js` + `/pay/create-order`, `/pay/verify`) with **mock fallback** when `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` absent (order ids `order_mock_*`, auto-verify). HMAC signature verified in real mode.
+- **Annual plan ₹1,99,000/yr** (`CompanyPlan.jsx` + `/company/status`, `/pay/verify subscription`): unlimited free unlocks + 20 Standard-CV PDF downloads/day (`/cv/{id}/download`, `build_seeker_cv_pdf`, reportlab) + home-page banner (`/company/banner`, `/banners`, `HomeBanners.jsx`). `is_subscribed()` checks 365-day expiry.
+- **Company requirement fields:** `vessel_name`, `port`, `audits[]` (ISPS/Internal/External/SIRE/RightShip) added to `ProviderRequirement`, captured/edited in `EditPostDialog`, and shown to seekers via `provider_card`.
+- Contact (name/mobile/email) stays locked until unlocked. Verified: testing_agent iteration_15 (backend 8/8 after provider_card fix, frontend flows green) + curl.
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

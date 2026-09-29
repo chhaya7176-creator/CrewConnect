@@ -1,0 +1,78 @@
+{
+  "summary": "Iteration 15 validated the reworked company flow end-to-end: 5-free-then-₹29 unlocks, ₹1,99,000/yr subscription (mock payments), banner editor + home-page listing, Standard CV PDF download (subscribed + 20/day), and EditPostDialog persisting vessel_name/port/audits. 7/8 backend tests pass; 1 documented backend bug (provider_card omits new fields to seekers). All requested frontend flows pass; one minor state-refresh issue (Download CV button appears only after page reload post-subscribe).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/matches (seeker role)",
+        "issue": "provider_card() at server.py:628 does not include vessel_name / port / audits. PUT /provider/requirement correctly persists them and company-side /matches['requirement'] echoes them, but seekers never see these new fields on their match cards — contradicts the review-request contract 'GET /api/matches returns them'."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Company subscribe -> Matches -> Download CV",
+        "issue": "After clicking subscribe-btn and CompanyPlan flips to active, the Matches component's local `status` state is not re-fetched. The download-cv-<id> button (gated on status?.subscribed) only appears after a full page reload. First testing attempt failed with an 8s wait for download-cv-<SID>; API state was correct.",
+        "affected_selectors": ["download-cv-<seeker_id>"]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Home page ('How it works' -> step 04 'Match & unlock')",
+        "issues": [
+          "Copy is stale: says 'Companies unlock a full CV for ₹49. Seafarers get noticed faster free by sharing — or a one-time ₹499 boost.' Should reflect new pricing (5 free then ₹29 per unlock, ₹1,99,000/yr plan)."
+        ]
+      }
+    ]
+  },
+  "verifications": {
+    "backend": {
+      "company_status_defaults": "subscribed=false, free_unlocks_left=5, unlock_price=29, subscription_price=199000, download_limit=20",
+      "five_free_then_paid": "6th /unlock-cv returns needs_payment=true, amount=29, free_unlocks_left=0",
+      "mock_cv_unlock": "/pay/create-order (mock=true, order_id order_mock_*) + /pay/verify -> unlock persists (subsequent /unlock-cv returns already=true) and cv.name revealed",
+      "mock_subscription": "/pay/verify sets subscribed=true with ~365d expiry; unlocks after are amount=0 free",
+      "banner_gate": "POST /company/banner -> 403 when unsubscribed; 200 after subscribe; row visible in GET /banners",
+      "cv_pdf_download": "GET /cv/{id}/download -> 403 unsub; 200 application/pdf (%PDF magic) when subscribed; downloads_today increments",
+      "provider_requirement_persistence": "PUT persists vessel_name/port/audits; company /matches['requirement'] echoes them",
+      "seeker_contact_redaction": "name/mobile/email = '🔒 Locked' in company /matches until /unlock-cv reveals them"
+    },
+    "frontend": {
+      "company_plan_upgrade_card": "visible with '₹1,99,000/yr' and 'no ₹29 per profile' copy; 'first 5 contact unlocks are free, then ₹29' subtext present",
+      "unlock_btn_first_5": "shows 'Unlock free · 5 left' on a fresh company account",
+      "unlock_btn_sixth": "flips to 'Unlock · ₹29' after 5 free unlocks; click triggers mock payFor and toast 'CV unlocked! (₹29 paid)'",
+      "subscribe_flow": "clicking subscribe-btn (mock) flips card to company-plan-active with SUBSCRIBED badge",
+      "banner_editor": "banner-title-input + save-banner-btn work; toast 'Home-page banner saved'",
+      "home_banner": "5 home-banner elements visible on / for subscribed companies",
+      "edit_post_dialog_audits": "edit-vessel-name / edit-port / edit-audit-type / edit-audit-date / edit-audit-add / edit-save-btn all present; PUT round-trip confirmed via /matches['requirement']"
+    }
+  },
+  "critical_code_review_comments": [
+    "server.py provider_card() must include vessel_name, port and audits so seekers can actually see them in /matches and /browse — otherwise EditPostDialog changes are invisible to crew.",
+    "Home page 'How it works' step 04 still references ₹49 unlock and ₹499 boost. Not part of updated review copy — should read '5 free unlocks then ₹29' (and align with the new ₹1,99,000/yr plan).",
+    "CompanyPlan.subscribe() only refreshes /company/status; sibling Matches component keeps stale `status.subscribed=false`, so the Download CV button (and the 'Unlock free' unlimited label) only appears after a manual page reload. Consider lifting `status` to a shared store, emitting an event on subscribe, or re-fetching on tab focus.",
+    "Audit date input in EditPostDialog appears to save the value verbatim (observed '20/26/0420' from a 2026-04-20 <input type=date>). The frontend is probably mis-formatting DD/MM/YYYY vs YYYY-MM-DD before posting. Backend accepts it as an opaque string, so review request's {type,date} shape ends up polluted. Recommend either standardising to YYYY-MM-DD or parsing before save.",
+    "server.py is 1,899 lines — well above the 700-line guideline; consider splitting into routers (auth, seeker, provider, pay, company, matches, alerts, referral).",
+    "test_credentials.md still documents old pricing (₹49 unlock, ₹499 boost, ₹100 registration) and should be updated to reflect the new company flow so the next testing agent starts from the correct baseline."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_company_flow_v2.py",
+    "/app/test_reports/pytest/iteration_15.xml"
+  ],
+  "action_items": [
+    "BACKEND: extend provider_card() to include vessel_name, port and audits (or return the raw doc) so seekers see them on /matches and /browse.",
+    "FRONTEND: refresh Matches `status` after successful subscribe (or lift status to context/store) so the download-cv-<id> button and 'unlimited' unlock label appear without a reload.",
+    "FRONTEND: update Home page 'How it works' step 04 copy to the new pricing (5 free -> ₹29 per unlock; ₹1,99,000/yr plan).",
+    "FRONTEND: fix EditPostDialog audit-date formatting before POST — currently persists e.g. '20/26/0420' instead of ISO/DD-MM-YYYY.",
+    "DOCS: update /app/memory/test_credentials.md to reflect new company pricing (drop ₹49 unlock / ₹499 boost mentions, add ₹29 unlock + ₹1,99,000/yr)."
+  ],
+  "updated_files": ["/app/backend/tests/test_company_flow_v2.py"],
+  "success_rate": {"backend": "87.5% (7/8 — 1 documents provider_card bug)", "frontend": "6/7 requested flows fully green; 1 (download-cv visibility) needs page reload"},
+  "test_credentials": "OTP always 123456. Tests provision fresh +91XXXXXXXXXX accounts per case via /auth/request-otp + /auth/verify-otp. Mock Razorpay auto-completes (no keys set).",
+  "seed_data_creation": "Backend + Playwright each create 1 provider + 1 primary seeker + 5 extra matching seekers (Chief Engineer / Bulk Carrier / 30+ months / India) plus one TEST_UI banner. No cleanup performed (mongo IDs are unique per run and prefixed 'TEST_').",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Reusable regression: /app/backend/tests/test_company_flow_v2.py (run with `pytest -o addopts= backend/tests/test_company_flow_v2.py`). Key gotchas: (1) /matches response uses 'matches' key, not 'results'; (2) redacted contacts render as '🔒 Locked' (with lock emoji + space), not plain 'Locked'; (3) mock Razorpay is triggered whenever RAZORPAY_KEY_ID/SECRET are unset in backend/.env — order_id starts with 'order_mock_'; (4) provider_card currently omits vessel_name/port/audits — will need a re-run after main-agent fix. Home page banners are cumulative across runs (5 present in the dev DB) — assertions should use >=1 rather than an exact count.",
+  "rca of the issue": "Seekers can't see vessel_name/port/audits because /matches builds provider cards via provider_card() (server.py:628) which whitelists only the legacy fields — the new columns from ProviderRequirement (added at lines 188-190) are silently dropped even though PUT persists them and matches_requirement() sees them. Fix: extend provider_card()'s dict with `'vessel_name': p.get('vessel_name',''), 'port': p.get('port',''), 'audits': p.get('audits') or []` (or splat `**{k: p.get(k) for k in ('vessel_name','port','audits')}`)."
+}

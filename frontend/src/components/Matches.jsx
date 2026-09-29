@@ -231,6 +231,13 @@ export const Matches = ({ browse = false, onChange }) => {
   }).catch(() => setRes({ role: null, matches: [] }));
   useEffect(() => { load(); }, [browse]);
 
+  useEffect(() => {
+    const refresh = () => api.get("/company/status").then((s) => setStatus(s.data)).catch(() => {});
+    window.addEventListener("mc-status-changed", refresh);
+    window.addEventListener("focus", refresh);
+    return () => { window.removeEventListener("mc-status-changed", refresh); window.removeEventListener("focus", refresh); };
+  }, []);
+
   const unlock = async (id) => {
     setBusy(id);
     try {
