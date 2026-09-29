@@ -175,6 +175,18 @@ export const ChatFlow = () => {
     }
   };
 
+  const [editReturn, setEditReturn] = useState(null);
+
+  const CHIP_KEYS = ["rank", "vessel_type", "sea_time", "sea_time_priority", "coc", "coc_priority", "us_visa", "us_visa_priority", "availability", "availability_priority", "name", "company_name", "vessel_name", "port", "other_visa"];
+  const chipLabel = (k) => ({ rank: "Rank", vessel_type: "Vessel type", sea_time: "Sea time", sea_time_priority: "Sea-time priority", coc: "COC", coc_priority: "COC priority", us_visa: "US visa", us_visa_priority: "US-visa priority", availability: "Availability", availability_priority: "Availability priority", name: "Name", company_name: "Company", vessel_name: "Vessel name", port: "Port", other_visa: "Other visa" }[k] || k);
+  const editField = (key) => {
+    const j = flow.findIndex((f) => f.key === key);
+    if (j < 0) return;
+    setEditReturn(idx);
+    setIdx(j);
+    pushBotStep({ ...flow[j], bot: `Update your ${chipLabel(key)}:` });
+  };
+
   const roleBoxes = (
     <div className="grid grid-cols-2 gap-3 animate-fade-up" data-testid="role-select">
       <button
@@ -202,6 +214,21 @@ export const ChatFlow = () => {
 
   const handleValue = async (value, label) => {
     const s = step;
+    // In-flow correction: when editing a single field from the review recap, set it and jump back.
+    if (editReturn !== null && !(s.key === "coc" && value === "Others") && !(s.key === "availability" && value === "Custom date")) {
+      addUser(label ?? value);
+      let ek = s.key;
+      if (ek === "coc_other") ek = "coc";
+      if (ek === "availability_date") ek = "availability";
+      const nf = { ...form, [ek]: value };
+      setForm(nf);
+      const ret = editReturn;
+      setEditReturn(null);
+      setIdx(ret);
+      if (flow[ret]?.type === "review") genSummary(nf);
+      addBot("✅ Updated.");
+      return;
+    }
     addUser(label ?? value);
 
     // conditional: COC Others (seeker) -> ask free text
@@ -340,8 +367,8 @@ export const ChatFlow = () => {
               <Upload className="w-4 h-4" /> {cvUploading ? "Uploading..." : "Upload CV / biodata"}
             </Button>
             <Button
-              variant="ghost"
-              className="text-[#8A8F9E] hover:text-white"
+              variant="outline"
+              className="rounded-full border-[#0066FF] bg-[#0066FF]/10 text-[#4d94ff] hover:bg-[#0066FF] hover:text-white"
               disabled={cvUploading}
               onClick={() => { addUser("Skip for now"); advance(flow, idx); }}
               data-testid="chat-cv-skip-btn"
@@ -360,7 +387,7 @@ export const ChatFlow = () => {
             <button
               key={o}
               onClick={() => handleValue(o)}
-              className="px-4 py-2 rounded-full border border-[#0066FF] text-[#4d94ff] text-sm hover:bg-[#0066FF] hover:text-white transition-colors"
+              className="px-4 py-2 rounded-full bg-[#0066FF] text-white text-sm font-medium border border-[#0066FF] hover:bg-[#0052cc] shadow-md transition-colors"
               data-testid={`quick-${o}`}
             >
               {o}
@@ -429,6 +456,14 @@ export const ChatFlow = () => {
             disabled={loadingSummary}
             data-testid="summary-textarea"
           />
+          <div className="flex flex-wrap gap-2" data-testid="review-edit-chips">
+            <span className="w-full text-[11px] text-[#8A8F9E]">Tap any answer to correct it (Mobile &amp; Email are locked after OTP):</span>
+            {flow.filter((f) => CHIP_KEYS.includes(f.key) && (form[f.key] ?? "") !== "").map((f) => (
+              <button key={f.key} onClick={() => editField(f.key)} className="text-xs bg-[#0066FF]/15 border border-[#0066FF]/40 text-[#4d94ff] rounded-full px-3 py-1 hover:bg-[#0066FF] hover:text-white transition-colors" data-testid={`edit-chip-${f.key}`}>
+                {chipLabel(f.key)}: {Array.isArray(form[f.key]) ? form[f.key].join(", ") : form[f.key]} ✎
+              </button>
+            ))}
+          </div>
           <Button
             className="w-full bg-[#FF5A00] hover:bg-[#E04F00] rounded-full gap-2"
             disabled={loadingSummary || !summary}

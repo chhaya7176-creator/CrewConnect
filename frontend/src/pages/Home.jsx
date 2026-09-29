@@ -77,10 +77,10 @@ export default function Home() {
         {/* Right: chat */}
         <div className="order-1 lg:order-2 lg:sticky lg:top-24">
           <div className="flex items-center justify-between gap-2 mb-2 px-1">
-            <span className="inline-flex items-center text-xs font-light text-[#FF7A2E] bg-[#FF5A00]/20 border border-[#FF5A00]/40 rounded-full px-3 py-1">New here? Chat below to get started.</span>
+            <span className="inline-flex items-center text-xs font-light text-white bg-[#FF5A00] border border-[#FF5A00] rounded-full px-3 py-1 shadow-md">New here? Chat below to get started.</span>
             <button
               onClick={() => setLoginOpen(true)}
-              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-light text-[#FF7A2E] hover:text-[#FF5A00] bg-[#FF5A00]/20 border border-[#FF5A00]/40 rounded-full px-3 py-1 transition-colors"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-light text-white bg-[#FF5A00] hover:bg-[#E04F00] border border-[#FF5A00] rounded-full px-3 py-1 shadow-md transition-colors"
               data-testid="home-returning-login"
             >
               Already registered? Log in

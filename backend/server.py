@@ -8,6 +8,7 @@ import io
 import re
 import json
 import asyncio
+import secrets
 import base64
 import logging
 from pathlib import Path
@@ -935,7 +936,18 @@ async def verify_payment(body: VerifyIn, user=Depends(get_current_user)):
                 "cv": redact_seeker(seeker, True)}
     expiry = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
     await db.users.update_one({"id": user["id"]}, {"$set": {"subscribed": True, "subscription_expiry": expiry}})
-    return {"success": True, "purpose": "subscription", "subscription_expiry": expiry, "amount": SUBSCRIPTION_PRICE}
+    prov = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]) or {}
+    base = round(SUBSCRIPTION_PRICE / 1.18, 2)
+    inv = {"user_id": user["id"],
+           "invoice_no": f"SC-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}",
+           "amount": SUBSCRIPTION_PRICE, "base": base, "gst_pct": 18, "gst": round(SUBSCRIPTION_PRICE - base, 2),
+           "company_name": prov.get("company_name", ""), "emailed_to": prov.get("email") or user.get("mobile", ""),
+           "email_status": "simulated", "at": now}
+    await db.invoices.insert_one(dict(inv))
+    inv.pop("_id", None)
+    logger.info(f"GST invoice {inv['invoice_no']} emailed (DEMO) to {inv['emailed_to']}")
+    return {"success": True, "purpose": "subscription", "subscription_expiry": expiry,
+            "amount": SUBSCRIPTION_PRICE, "invoice": inv}
 
 
 # ---------------- Company subscription / banner / CV download ----------------
@@ -976,6 +988,51 @@ async def get_banners():
     rows = await db.banners.find({}, {"_id": 0}).to_list(50)
     out = [b for b in rows if await is_subscribed(b["user_id"])]
     return {"banners": out}
+
+
+@api_router.get("/invoices")
+async def my_invoices(user=Depends(get_current_user)):
+    rows = await db.invoices.find({"user_id": user["id"]}, {"_id": 0}).sort("at", -1).to_list(100)
+    return {"invoices": rows}
+
+
+def _days_until(date_str: str):
+    m = re.match(r"^\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})", date_str or "")
+    if not m:
+        return None
+    try:
+        due = datetime(int(m.group(3)), int(m.group(2)), int(m.group(1)), tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return (due.date() - datetime.now(timezone.utc).date()).days
+
+
+@api_router.post("/cron/audit-reminders")
+async def cron_audit_reminders(authorization: str = Header(None)):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    expected = os.environ.get("WEBHOOK_CRON_SECRET") or ""
+    token = (authorization or "").replace("Bearer ", "").strip()
+    if not expected or not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    sent = 0
+    providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
+    for p in providers:
+        for a in (p.get("audits") or []):
+            dleft = _days_until(a.get("date"))
+            if dleft in (21, 14, 7):
+                key = f"{p['id']}:{a.get('type')}:{a.get('date')}:{dleft}"
+                if await db.audit_reminders.find_one({"key": key}):
+                    continue
+                wk = {21: "3 weeks", 14: "2 weeks", 7: "1 week"}[dleft]
+                msg = (f"Reminder: {a.get('type')} audit for "
+                       f"{p.get('vessel_name') or p.get('company_name') or 'your vessel'} "
+                       f"is due on {a.get('date')} — {wk} away.")
+                await db.audit_reminders.insert_one({
+                    "key": key, "user_id": p["user_id"], "company_name": p.get("company_name", ""),
+                    "message": msg, "channel": "whatsapp+email (demo)",
+                    "at": datetime.now(timezone.utc).isoformat()})
+                sent += 1
+    return {"ok": True, "sent": sent}
 
 
 def build_seeker_cv_pdf(s: dict) -> bytes:

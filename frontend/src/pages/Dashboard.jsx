@@ -221,6 +221,18 @@ const MyPosts = ({ data, onChange }) => {
             <div><span className="text-[#8A8F9E] text-[10px] uppercase">US Visa</span><div className="font-data">{p.us_visa}</div></div>
             <div><span className="text-[#8A8F9E] text-[10px] uppercase">Availability</span><div className="font-data">{p.availability}</div></div>
           </div>
+          {isCompany && (p.vessel_name || p.port || (p.audits || []).length > 0) && (
+            <div className="mt-3 text-xs" data-testid={`post-audits-${p.id}`}>
+              {(p.vessel_name || p.port) && <div className="text-[#8A8F9E] mb-1">Vessel: {p.vessel_name || "—"} · Port: {p.port || "—"}</div>}
+              {(p.audits || []).length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {p.audits.map((a, i) => (
+                    <span key={i} className="text-[10px] bg-[#FF5A00]/20 border border-[#FF5A00]/40 text-[#FF7A2E] rounded-full px-2 py-0.5">{a.type} · {a.date}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {p.boosted && <span className="inline-block mt-3 text-[10px] px-2 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">BOOSTED</span>}
           <div className="text-[10px] text-[#8A8F9E] mt-3 font-data">Posted {p.created_at ? new Date(p.created_at).toLocaleDateString() : ""}</div>
         </div>

@@ -76,6 +76,13 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - **Company requirement fields:** `vessel_name`, `port`, `audits[]` (ISPS/Internal/External/SIRE/RightShip) added to `ProviderRequirement`, captured/edited in `EditPostDialog`, and shown to seekers via `provider_card`.
 - Contact (name/mobile/email) stays locked until unlocked. Verified: testing_agent iteration_15 (backend 8/8 after provider_card fix, frontend flows green) + curl.
 
+## Fixes (2026-06) — Audit reminders, GST invoice, visibility, in-flow correction
+- **Audit reminders** (`.emergent/crons.yml` daily → `POST /api/cron/audit-reminders`, Bearer `WEBHOOK_CRON_SECRET`): nudges a company **3/2/1 weeks** before each scheduled vessel audit (ISPS/SIRE/RightShip/Internal/External/etc.), deduped in `audit_reminders`, WhatsApp+email **mocked**. Audits are added/edited at **Dashboard → My Posts → Edit → "Upcoming audits"** and now shown on the post card + to matching seekers (provider_card).
+- **GST invoice**: on ₹1,99,000 subscription verify, a GST invoice (18% split, base+gst) is generated, stored (`invoices`), mock-emailed, and returned; `GET /api/invoices` lists them.
+- **Visibility (#3/#4)**: home "New here?/Already registered?" pills are solid orange + white text; chat quick-option buttons (Yes/No/Must have/Preferred/Mandatory/Immediate/Custom date) are solid blue + white; Skip button is a visible outline.
+- **In-flow correction (#5)**: the Review step shows tappable chips for every answer — tap to jump back and fix any field, then return to the summary. Mobile & Email stay locked after OTP. (Plus the existing "↩ Correct last answer" and post-submit My Posts → Edit.)
+- Verified: cron auth 401/200 + fires at 21d + dedup; GST invoice split; solid pills screenshot.
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).
