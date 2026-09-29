@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { LoginDialog } from "@/components/LoginDialog";
 import { ChatFlow } from "@/components/ChatFlow";
+import { HomeBanners } from "@/components/HomeBanners";
 import { ShieldCheck, Zap, IndianRupee, Users, TrendingUp, FileCheck2 } from "lucide-react";
 
 const SEA_BG = "https://static.prod-images.emergentagent.com/jobs/73dfd5f5-2c66-45fa-b175-89ba7a0303b2/images/07a6b47f6021204a8f54a17e0c6c17007f53b73bc1e2e2a5f074a57c776d0174.jpeg";
@@ -28,6 +29,7 @@ export default function Home() {
       <div className="fixed inset-0 z-0" style={{ background: "linear-gradient(180deg, rgba(8,12,22,0.06) 0%, rgba(6,11,20,0.26) 52%, rgba(3,8,16,0.72) 100%)" }} />
       <Navbar onLogin={() => setLoginOpen(true)} />
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+      <HomeBanners />
 
       <div className="relative z-10 max-w-[1600px] mx-auto px-5 sm:px-8 py-6 lg:py-10 grid lg:grid-cols-[minmax(0,1fr)_420px] gap-8">
         {/* Left: branding */}
@@ -49,12 +51,12 @@ export default function Home() {
               <div key={s.label} className="p-4 sm:p-6 rounded-xl border border-white/10 bg-[#0a1a2b]/45 backdrop-blur-md" data-testid={`stat-${s.label}`}>
                 <s.icon className="w-5 h-5 text-[#FF5A00] mb-3" />
                 <div className="font-heading font-extrabold text-2xl sm:text-3xl font-data">{s.value}</div>
-                <div className="text-xs text-[#8A8F9E] mt-1">{s.label}</div>
+                <div className="inline-flex items-center text-xs font-light text-[#FF7A2E] bg-[#FF5A00]/20 border border-[#FF5A00]/40 rounded-full px-2.5 py-0.5 mt-2">{s.label}</div>
               </div>
             ))}
           </div>
 
-          <h2 className="font-heading font-bold text-lg mb-4 text-[#8A8F9E] uppercase tracking-wider">How it works</h2>
+          <h2 className="inline-flex items-center font-heading font-light text-sm text-[#FF7A2E] bg-[#FF5A00]/20 border border-[#FF5A00]/40 rounded-full px-3 py-1 uppercase tracking-wider mb-4">How it works</h2>
           <div className="grid sm:grid-cols-2 gap-4">
             {STEPS.map((s, i) => (
               <div key={s.title} className="flex gap-4 p-5 rounded-xl border border-white/10 bg-[#0a1a2b]/45 backdrop-blur-md hover:border-white/20 transition-colors">
@@ -75,10 +77,10 @@ export default function Home() {
         {/* Right: chat */}
         <div className="order-1 lg:order-2 lg:sticky lg:top-24">
           <div className="flex items-center justify-between gap-2 mb-2 px-1">
-            <span className="text-xs font-light text-[#FF7A2E] drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">New here? Chat below to get started.</span>
+            <span className="inline-flex items-center text-xs font-light text-[#FF7A2E] bg-[#FF5A00]/20 border border-[#FF5A00]/40 rounded-full px-3 py-1">New here? Chat below to get started.</span>
             <button
               onClick={() => setLoginOpen(true)}
-              className="text-xs font-light text-[#FF7A2E] hover:text-[#FF5A00] transition-colors inline-flex items-center gap-1 whitespace-nowrap drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]"
+              className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-light text-[#FF7A2E] hover:text-[#FF5A00] bg-[#FF5A00]/20 border border-[#FF5A00]/40 rounded-full px-3 py-1 transition-colors"
               data-testid="home-returning-login"
             >
               Already registered? Log in

@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Empty } from "@/pages/Dashboard";
-import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift, Lightbulb } from "lucide-react";
+import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift, Lightbulb, Download } from "lucide-react";
+import { payFor } from "@/lib/pay";
 import { MatchAlerts } from "@/components/MatchAlerts";
 import { GetNoticedFaster } from "@/components/GetNoticedFaster";
 import { buildContactMessage, waLink } from "@/lib/waMessage";
@@ -222,20 +223,43 @@ export const Matches = ({ browse = false, onChange }) => {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(null);
 
-  const load = () => api.get(browse ? "/browse" : "/matches").then((r) => setRes(r.data)).catch(() => setRes({ role: null, matches: [] }));
+  const [status, setStatus] = useState(null);
+
+  const load = () => api.get(browse ? "/browse" : "/matches").then((r) => {
+    setRes(r.data);
+    if (r.data.role === "provider") api.get("/company/status").then((s) => setStatus(s.data)).catch(() => {});
+  }).catch(() => setRes({ role: null, matches: [] }));
   useEffect(() => { load(); }, [browse]);
 
   const unlock = async (id) => {
     setBusy(id);
     try {
       const r = await api.post("/unlock-cv", { seeker_id: id });
-      toast.success(r.data.amount ? "CV unlocked! (₹49 paid — demo)" : "CV unlocked — free!");
+      if (r.data.needs_payment) {
+        await payFor("cv_unlock", { seeker_id: id });
+        toast.success("CV unlocked! (₹29 paid)");
+      } else {
+        toast.success(r.data.amount ? "CV unlocked! (₹29 paid)" : "CV unlocked — free!");
+      }
       load();
       onChange?.();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Unlock failed");
+      toast.error(e.response?.data?.detail || e.message || "Unlock failed");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const downloadCv = async (id, name) => {
+    try {
+      const res = await api.get(`/cv/${id}/download`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url; a.download = `cv-${(name || "crew").replace(/\s+/g, "_")}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Standard CV downloaded");
+    } catch (e) {
+      toast.error("Download failed — check your plan or daily limit");
     }
   };
 
@@ -315,6 +339,17 @@ export const Matches = ({ browse = false, onChange }) => {
                 >
                   <MessageCircle className="w-4 h-4" /> WhatsApp
                 </Button>
+                {status?.subscribed && (
+                  <Button
+                    variant="outline"
+                    className="border-[#FF5A00]/40 bg-transparent hover:bg-[#FF5A00]/10 text-[#FF7A2E] rounded-full px-3"
+                    onClick={() => downloadCv(c.id, c.name)}
+                    data-testid={`download-cv-${c.id}`}
+                    title="Download Standard CV (PDF)"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
             ) : (
               <Button
@@ -323,8 +358,8 @@ export const Matches = ({ browse = false, onChange }) => {
                 onClick={() => unlock(c.id)}
                 data-testid={`unlock-btn-${c.id}`}
               >
-                {res.free_unlocks_left > 0 ? <Unlock className="w-4 h-4" /> : <IndianRupee className="w-4 h-4" />}
-                {busy === c.id ? "Processing..." : (res.free_unlocks_left > 0 ? `Unlock free · ${res.free_unlocks_left} left` : "Unlock full CV · ₹49")}
+                {(status?.subscribed || res.free_unlocks_left > 0) ? <Unlock className="w-4 h-4" /> : <IndianRupee className="w-4 h-4" />}
+                {busy === c.id ? "Processing..." : (status?.subscribed ? "Unlock free" : (res.free_unlocks_left > 0 ? `Unlock free · ${res.free_unlocks_left} left` : "Unlock · ₹29"))}
               </Button>
             )}
           </div>

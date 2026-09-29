@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList, Bookmark, Pencil } from "lucide-react";
 import { EditPostDialog } from "@/components/EditPostDialog";
 import { DataRights } from "@/components/DataRights";
+import { CompanyPlan } from "@/components/CompanyPlan";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -99,6 +100,8 @@ export default function Dashboard() {
           <StatCard icon={IndianRupee} label="CVs Unlocked" value={data?.unlocks?.length || 0} />
           <StatCard icon={History} label="Payments" value={data?.payments?.length || 0} />
         </div>
+
+        {providerReq && <CompanyPlan />}
 
         <Tabs defaultValue="matches" className="w-full">
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">

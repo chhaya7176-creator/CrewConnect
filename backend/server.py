@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, UploadFile, File, Query, Response
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -184,6 +185,9 @@ class ProviderRequirement(BaseModel):
     availability: str
     availability_priority: Optional[str] = "Preferred"
     summary: Optional[str] = ""
+    vessel_name: Optional[str] = ""
+    port: Optional[str] = ""
+    audits: Optional[List[dict]] = []
 
 
 class FeedbackIn(BaseModel):
@@ -518,11 +522,22 @@ def twilio_enabled() -> bool:
                 and (TWILIO_WHATSAPP_FROM or TWILIO_MESSAGING_SERVICE_SID))
 
 
+async def is_subscribed(user_id: str) -> bool:
+    """True if the company holds an active (non-expired) annual subscription."""
+    u = await db.users.find_one({"id": user_id}, {"_id": 0}) or {}
+    if not u.get("subscribed"):
+        return False
+    exp = u.get("subscription_expiry")
+    if exp and exp < datetime.now(timezone.utc).isoformat():
+        return False
+    return True
+
+
 async def company_is_paying(user_id: str) -> bool:
     """A company qualifies for proactive alerts once it is an engaged/paying customer:
     it has unlocked at least one CV, made a paid unlock, or holds a subscription."""
     u = await db.users.find_one({"id": user_id}, {"_id": 0}) or {}
-    if u.get("subscribed"):
+    if await is_subscribed(user_id):
         return True
     if await db.unlocks.count_documents({"user_id": user_id}) > 0:
         return True
@@ -797,35 +812,226 @@ class UnlockRequest(BaseModel):
     seeker_id: str
 
 
-FREE_UNLOCKS = 10  # first 10 crew contacts free per company, then ₹49
+FREE_UNLOCKS = 5  # first 5 matched crew contacts free per company, then ₹29 each
+UNLOCK_PRICE = 29
+SUBSCRIPTION_PRICE = 199000
+
+
+async def _do_unlock(user_id: str, seeker_id: str, amount: int):
+    now = datetime.now(timezone.utc).isoformat()
+    await db.unlocks.update_one(
+        {"user_id": user_id, "seeker_id": seeker_id},
+        {"$set": {"user_id": user_id, "seeker_id": seeker_id, "amount": amount, "at": now}},
+        upsert=True,
+    )
+    if amount:
+        await db.payments.insert_one({"user_id": user_id, "type": "cv_unlock", "amount": amount, "at": now})
+    provider = await db.providers.find_one({"user_id": user_id}, {"_id": 0}, sort=[("created_at", -1)])
+    if provider:
+        await notify_company_of_boosted_matches(provider)
 
 
 @api_router.post("/unlock-cv")
 async def unlock_cv(req: UnlockRequest, user=Depends(get_current_user)):
+    """First 5 crew contacts are free (unlimited while subscribed); after that a ₹29 payment
+    is required — the client runs the Razorpay flow, then completes the unlock via /pay/verify."""
     seeker = await db.seekers.find_one({"id": req.seeker_id}, {"_id": 0})
     if not seeker:
         raise HTTPException(status_code=404, detail="Profile not found")
+    used = await db.unlocks.count_documents({"user_id": user["id"]})
     existing = await db.unlocks.find_one({"user_id": user["id"], "seeker_id": req.seeker_id}, {"_id": 0})
     if existing:
-        used = await db.unlocks.count_documents({"user_id": user["id"]})
         return {"success": True, "amount": existing.get("amount", 0), "already": True,
                 "free_unlocks_left": max(0, FREE_UNLOCKS - used), "cv": redact_seeker(seeker, True)}
-    used = await db.unlocks.count_documents({"user_id": user["id"]})
-    amount = 0 if used < FREE_UNLOCKS else 49  # first 10 free, then mock ₹49
+    subscribed = await is_subscribed(user["id"])
+    if not subscribed and used >= FREE_UNLOCKS:
+        return {"success": False, "needs_payment": True, "amount": UNLOCK_PRICE, "free_unlocks_left": 0}
+    await _do_unlock(user["id"], req.seeker_id, 0)
+    left = 999 if subscribed else max(0, FREE_UNLOCKS - (used + 1))
+    return {"success": True, "amount": 0, "free": True,
+            "free_unlocks_left": left, "cv": redact_seeker(seeker, True)}
+
+
+# ---------------- Payments (Razorpay + mock) ----------------
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET")
+
+
+def razorpay_enabled() -> bool:
+    return bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)
+
+
+def _rzp_client():
+    import razorpay
+    return razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+
+class OrderIn(BaseModel):
+    purpose: str  # "cv_unlock" | "subscription"
+    seeker_id: Optional[str] = None
+
+
+class VerifyIn(BaseModel):
+    order_id: str
+    purpose: str
+    seeker_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+
+
+def _amount_for(purpose: str) -> int:
+    return SUBSCRIPTION_PRICE if purpose == "subscription" else UNLOCK_PRICE
+
+
+@api_router.post("/pay/create-order")
+async def create_order(body: OrderIn, user=Depends(get_current_user)):
+    if body.purpose not in ("cv_unlock", "subscription"):
+        raise HTTPException(status_code=400, detail="Invalid purpose")
+    amount = _amount_for(body.purpose)
     now = datetime.now(timezone.utc).isoformat()
-    await db.unlocks.update_one(
-        {"user_id": user["id"], "seeker_id": req.seeker_id},
-        {"$set": {"user_id": user["id"], "seeker_id": req.seeker_id, "amount": amount, "at": now}},
-        upsert=True,
-    )
-    if amount:
-        await db.payments.insert_one({"user_id": user["id"], "type": "cv_unlock", "amount": amount, "at": now})
-    # Company is now an engaged/paying customer — alert it about currently-available boosted crew.
-    provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
-    if provider:
-        await notify_company_of_boosted_matches(provider)
-    return {"success": True, "amount": amount, "free": amount == 0,
-            "free_unlocks_left": max(0, FREE_UNLOCKS - (used + 1)), "cv": redact_seeker(seeker, True)}
+    if razorpay_enabled():
+        order = await asyncio.to_thread(lambda: _rzp_client().order.create({
+            "amount": amount * 100, "currency": "INR", "payment_capture": 1,
+            "receipt": f"{body.purpose[:12]}-{uuid.uuid4().hex[:8]}"}))
+        order_id, mock = order["id"], False
+    else:
+        order_id, mock = f"order_mock_{uuid.uuid4().hex[:14]}", True
+    await db.payments.insert_one({"user_id": user["id"], "type": body.purpose, "amount": amount,
+                                  "order_id": order_id, "seeker_id": body.seeker_id,
+                                  "status": "created", "mock": mock, "at": now})
+    provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]) or {}
+    return {"order_id": order_id, "amount": amount, "amount_paise": amount * 100, "currency": "INR",
+            "key_id": RAZORPAY_KEY_ID or "", "mock": mock, "purpose": body.purpose, "seeker_id": body.seeker_id,
+            "prefill": {"name": provider.get("company_name", ""), "email": provider.get("email", ""),
+                        "contact": user.get("mobile", "")}}
+
+
+@api_router.post("/pay/verify")
+async def verify_payment(body: VerifyIn, user=Depends(get_current_user)):
+    rec = await db.payments.find_one({"order_id": body.order_id, "user_id": user["id"]}, {"_id": 0})
+    if not rec:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if razorpay_enabled() and not rec.get("mock"):
+        try:
+            await asyncio.to_thread(lambda: _rzp_client().utility.verify_payment_signature({
+                "razorpay_order_id": body.order_id,
+                "razorpay_payment_id": body.razorpay_payment_id,
+                "razorpay_signature": body.razorpay_signature}))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Payment verification failed")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.payments.update_one({"order_id": body.order_id},
+                                 {"$set": {"status": "paid", "paid_at": now,
+                                           "payment_id": body.razorpay_payment_id}})
+    if body.purpose == "cv_unlock":
+        seeker = await db.seekers.find_one({"id": body.seeker_id}, {"_id": 0})
+        if not seeker:
+            raise HTTPException(status_code=404, detail="Profile not found")
+        await _do_unlock(user["id"], body.seeker_id, UNLOCK_PRICE)
+        return {"success": True, "purpose": "cv_unlock", "amount": UNLOCK_PRICE,
+                "cv": redact_seeker(seeker, True)}
+    expiry = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+    await db.users.update_one({"id": user["id"]}, {"$set": {"subscribed": True, "subscription_expiry": expiry}})
+    return {"success": True, "purpose": "subscription", "subscription_expiry": expiry, "amount": SUBSCRIPTION_PRICE}
+
+
+# ---------------- Company subscription / banner / CV download ----------------
+class BannerIn(BaseModel):
+    title: str
+    tagline: Optional[str] = ""
+    image_url: Optional[str] = ""
+
+
+@api_router.get("/company/status")
+async def company_status(user=Depends(get_current_user)):
+    sub = await is_subscribed(user["id"])
+    used = await db.unlocks.count_documents({"user_id": user["id"]})
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    dl = await db.cv_downloads.count_documents({"user_id": user["id"], "day": today})
+    banner = await db.banners.find_one({"user_id": user["id"]}, {"_id": 0})
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or {}
+    return {"subscribed": sub, "subscription_expiry": u.get("subscription_expiry"),
+            "free_unlocks_left": max(0, FREE_UNLOCKS - used), "unlock_price": UNLOCK_PRICE,
+            "subscription_price": SUBSCRIPTION_PRICE, "downloads_today": dl, "download_limit": 20,
+            "banner": banner}
+
+
+@api_router.post("/company/banner")
+async def set_banner(body: BannerIn, user=Depends(get_current_user)):
+    if not await is_subscribed(user["id"]):
+        raise HTTPException(status_code=403, detail="Home-page banner is part of the ₹1,99,000/yr plan")
+    provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]) or {}
+    await db.banners.update_one({"user_id": user["id"]},
+        {"$set": {"user_id": user["id"], "title": body.title, "tagline": body.tagline,
+                  "image_url": body.image_url, "company_name": provider.get("company_name", ""),
+                  "updated_at": datetime.now(timezone.utc).isoformat()}}, upsert=True)
+    return {"ok": True}
+
+
+@api_router.get("/banners")
+async def get_banners():
+    rows = await db.banners.find({}, {"_id": 0}).to_list(50)
+    out = [b for b in rows if await is_subscribed(b["user_id"])]
+    return {"banners": out}
+
+
+def build_seeker_cv_pdf(s: dict) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+    import textwrap
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+    c.setFillColorRGB(1, 0.35, 0)
+    c.rect(0, h - 16 * mm, w, 16 * mm, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(18 * mm, h - 11 * mm, "SMART CREWING — Standard CV")
+    c.setFillColorRGB(0, 0, 0)
+    y = h - 25 * mm
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(18 * mm, y, s.get("name", "Seafarer"))
+    y -= 10 * mm
+    c.setFont("Helvetica", 11)
+    rows = [("Rank", s.get("rank")), ("Vessel Type", s.get("vessel_type")),
+            ("Sea Time", s.get("sea_time")), ("COC", s.get("coc")),
+            ("US Visa", s.get("us_visa")), ("Other Visa", s.get("other_visa", "")),
+            ("Available From", s.get("availability")), ("Mobile", s.get("mobile")),
+            ("Email", s.get("email"))]
+    for k, v in rows:
+        c.drawString(18 * mm, y, f"{k}: {v if v not in (None, '') else '—'}")
+        y -= 7 * mm
+    summ = s.get("summary", "")
+    if summ:
+        y -= 4 * mm
+        c.setFont("Helvetica-Bold", 11); c.drawString(18 * mm, y, "Summary"); y -= 7 * mm
+        c.setFont("Helvetica", 10)
+        for line in textwrap.wrap(summ, 95):
+            c.drawString(18 * mm, y, line); y -= 6 * mm
+    c.setFont("Helvetica-Oblique", 8)
+    c.drawString(18 * mm, 12 * mm, f"Generated by Smart Crewing · {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")
+    c.showPage(); c.save()
+    return buf.getvalue()
+
+
+@api_router.get("/cv/{seeker_id}/download")
+async def download_cv(seeker_id: str, user=Depends(get_current_user)):
+    if not await is_subscribed(user["id"]):
+        raise HTTPException(status_code=403, detail="CV download (Standard format) is part of the ₹1,99,000/yr plan")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    count = await db.cv_downloads.count_documents({"user_id": user["id"], "day": today})
+    if count >= 20:
+        raise HTTPException(status_code=429, detail="Daily limit of 20 CV downloads reached. Please try again tomorrow.")
+    seeker = await db.seekers.find_one({"id": seeker_id}, {"_id": 0})
+    if not seeker:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    pdf = await asyncio.to_thread(build_seeker_cv_pdf, seeker)
+    await db.cv_downloads.insert_one({"user_id": user["id"], "seeker_id": seeker_id, "day": today,
+                                      "at": datetime.now(timezone.utc).isoformat()})
+    fname = f"cv-{(seeker.get('name') or 'crew').replace(' ', '_')}.pdf"
+    return StreamingResponse(io.BytesIO(pdf), media_type="application/pdf",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @api_router.post("/boost-profile")
