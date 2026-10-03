@@ -99,6 +99,11 @@ RANKS = [
     "Able Seaman (AB)", "Ordinary Seaman (OS)", "Oiler", "Fitter",
     "Chief Cook", "Steward / Messman",
 ]
+# Extra ranks available ONLY in the company Crew Planner (not in chat/requirement dropdowns)
+CREW_PLANNER_RANKS = RANKS + [
+    "Fourth Officer", "Junior Officer", "Assistant Electrical Officer (AETO)",
+    "Trainee OS", "Trainee Wiper", "Trainee GS", "Trainee Fitter",
+]
 VESSEL_TYPES = [
     "Container", "Oil Tanker", "Chemical Tanker", "LNG / LPG Tanker",
     "Bulk Carrier", "General Cargo", "RoRo", "Passenger / Cruise",
@@ -123,6 +128,7 @@ US_VISA_PROVIDER = ["Must Have", "Preferred", "Not Required"]
 async def get_config():
     return {
         "ranks": RANKS,
+        "crew_planner_ranks": CREW_PLANNER_RANKS,
         "vessel_types": VESSEL_TYPES,
         "sea_time": SEA_TIME,
         "coc_seeker": COC_SEEKER,

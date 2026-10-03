@@ -147,7 +147,7 @@ export const CrewPlanner = () => {
   };
 
   useEffect(() => {
-    api.get("/config").then((r) => setRanks(r.data?.ranks || [])).catch(() => {});
+    api.get("/config").then((r) => setRanks(r.data?.crew_planner_ranks || r.data?.ranks || [])).catch(() => {});
     load();
   }, []);
 
