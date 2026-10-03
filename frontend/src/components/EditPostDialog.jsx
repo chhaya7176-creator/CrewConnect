@@ -9,7 +9,6 @@ import { api } from "@/lib/api";
 import { formatDateInput } from "@/lib/formatDate";
 
 const PRIORITIES = ["Mandatory", "Preferred"];
-const AUDIT_TYPES = ["ISPS", "Internal", "External", "SIRE", "RightShip"];
 
 const Fld = ({ label, children }) => (
   <div className="space-y-1.5">
@@ -35,9 +34,6 @@ export const EditPostDialog = ({ open, onOpenChange, post, isCompany, onSaved })
   const [cfg, setCfg] = useState(null);
   const [form, setForm] = useState({});
   const [coc, setCoc] = useState([]);
-  const [audits, setAudits] = useState([]);
-  const [auditType, setAuditType] = useState("");
-  const [auditDate, setAuditDate] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -48,7 +44,6 @@ export const EditPostDialog = ({ open, onOpenChange, post, isCompany, onSaved })
     if (open && post) {
       setForm({ ...post });
       setCoc(Array.isArray(post.coc) ? post.coc : post.coc ? [post.coc] : []);
-      setAudits(Array.isArray(post.audits) ? post.audits : []);
     }
   }, [open, post]);
 
@@ -70,7 +65,6 @@ export const EditPostDialog = ({ open, onOpenChange, post, isCompany, onSaved })
           summary: form.summary || "",
           vessel_name: form.vessel_name || "",
           port: form.port || "",
-          audits,
         };
         await api.put(`/provider/requirement/${post.id}`, payload);
       } else {
@@ -177,27 +171,6 @@ export const EditPostDialog = ({ open, onOpenChange, post, isCompany, onSaved })
               <Fld label="Port">
                 <Input className="bg-black/30 border-white/10" value={form.port || ""} onChange={(e) => set("port", e.target.value)} data-testid="edit-port" />
               </Fld>
-              <div className="sm:col-span-2">
-                <Fld label="Upcoming audits (ISPS, Internal, External, SIRE, RightShip)">
-                  <div className="flex flex-wrap gap-2 mb-2" data-testid="edit-audits-list">
-                    {audits.map((a, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 text-xs bg-black/30 border border-white/10 rounded-full px-3 py-1" data-testid={`audit-chip-${i}`}>
-                        {a.type} · {a.date}
-                        <button type="button" onClick={() => setAudits(audits.filter((_, j) => j !== i))} className="text-[#ff6b6b] ml-1 font-bold" data-testid={`remove-audit-${i}`}>×</button>
-                      </span>
-                    ))}
-                    {!audits.length && <span className="text-xs text-[#8A8F9E]">No audits added yet.</span>}
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="w-40"><Dropdown value={auditType} onChange={setAuditType} options={AUDIT_TYPES} testId="edit-audit-type" placeholder="Audit type" /></div>
-                    <Input className="bg-black/30 border-white/10 font-data flex-1" value={auditDate} onChange={(e) => setAuditDate(formatDateInput(e.target.value))} placeholder="dd/mm/yyyy" data-testid="edit-audit-date" />
-                    <Button type="button" variant="outline" className="rounded-full border-white/15 bg-transparent shrink-0" data-testid="edit-audit-add"
-                      onClick={() => { if (auditType && auditDate) { setAudits([...audits, { type: auditType, date: auditDate }]); setAuditType(""); setAuditDate(""); } }}>
-                      Add
-                    </Button>
-                  </div>
-                </Fld>
-              </div>
             </>
           )}
         </div>

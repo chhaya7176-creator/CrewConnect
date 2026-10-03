@@ -188,7 +188,14 @@ class ProviderRequirement(BaseModel):
     summary: Optional[str] = ""
     vessel_name: Optional[str] = ""
     port: Optional[str] = ""
-    audits: Optional[List[dict]] = []
+
+
+class CrewNeedIn(BaseModel):
+    vessel_name: str
+    ranks: List[str]
+    by_date: str
+    port: str
+    note: Optional[str] = ""
 
 
 class FeedbackIn(BaseModel):
@@ -645,7 +652,6 @@ def provider_card(p: dict, elig: bool) -> dict:
         "summary": p.get("summary", ""),
         "vessel_name": p.get("vessel_name", ""),
         "port": p.get("port", ""),
-        "audits": p.get("audits") or [],
     }
 
 
@@ -996,43 +1002,29 @@ async def my_invoices(user=Depends(get_current_user)):
     return {"invoices": rows}
 
 
-def _days_until(date_str: str):
-    m = re.match(r"^\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})", date_str or "")
-    if not m:
-        return None
-    try:
-        due = datetime(int(m.group(3)), int(m.group(2)), int(m.group(1)), tzinfo=timezone.utc)
-    except ValueError:
-        return None
-    return (due.date() - datetime.now(timezone.utc).date()).days
+@api_router.post("/crew-needs")
+async def create_crew_need(body: CrewNeedIn, user=Depends(get_current_user)):
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["user_id"] = user["id"]
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.crew_needs.insert_one(dict(doc))
+    doc.pop("_id", None)
+    return doc
 
 
-@api_router.post("/cron/audit-reminders")
-async def cron_audit_reminders(authorization: str = Header(None)):
-    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
-    expected = os.environ.get("WEBHOOK_CRON_SECRET") or ""
-    token = (authorization or "").replace("Bearer ", "").strip()
-    if not expected or not secrets.compare_digest(token, expected):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    sent = 0
-    providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
-    for p in providers:
-        for a in (p.get("audits") or []):
-            dleft = _days_until(a.get("date"))
-            if dleft in (21, 14, 7):
-                key = f"{p['id']}:{a.get('type')}:{a.get('date')}:{dleft}"
-                if await db.audit_reminders.find_one({"key": key}):
-                    continue
-                wk = {21: "3 weeks", 14: "2 weeks", 7: "1 week"}[dleft]
-                msg = (f"Reminder: {a.get('type')} audit for "
-                       f"{p.get('vessel_name') or p.get('company_name') or 'your vessel'} "
-                       f"is due on {a.get('date')} — {wk} away.")
-                await db.audit_reminders.insert_one({
-                    "key": key, "user_id": p["user_id"], "company_name": p.get("company_name", ""),
-                    "message": msg, "channel": "whatsapp+email (demo)",
-                    "at": datetime.now(timezone.utc).isoformat()})
-                sent += 1
-    return {"ok": True, "sent": sent}
+@api_router.get("/crew-needs")
+async def list_crew_needs(user=Depends(get_current_user)):
+    rows = await db.crew_needs.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"crew_needs": rows}
+
+
+@api_router.delete("/crew-needs/{need_id}")
+async def delete_crew_need(need_id: str, user=Depends(get_current_user)):
+    res = await db.crew_needs.delete_one({"id": need_id, "user_id": user["id"]})
+    if not res.deleted_count:
+        raise HTTPException(status_code=404, detail="Crew requirement not found")
+    return {"ok": True}
 
 
 def build_seeker_cv_pdf(s: dict) -> bytes:
@@ -1190,6 +1182,7 @@ async def dashboard(user=Depends(get_current_user)):
     payments = await db.payments.find({"user_id": user["id"]}, {"_id": 0}).to_list(100)
     docs_count = await db.documents.count_documents({"user_id": user["id"], "is_deleted": False})
     wa = await db.wa_alerts.find({"company_user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    crew_needs = await db.crew_needs.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return {
         "seeker_profiles": seekers,
         "provider_requirements": providers,
@@ -1197,6 +1190,7 @@ async def dashboard(user=Depends(get_current_user)):
         "payments": payments,
         "documents_count": docs_count,
         "wa_alerts": wa,
+        "crew_needs": crew_needs,
     }
 
 

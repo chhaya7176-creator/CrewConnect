@@ -129,3 +129,36 @@ body {
 }
 .ring-glow { animation: ringGlow 1.6s ease-in-out infinite; }
 
+/* ---- Crew requirement urgency pulses ---- */
+@keyframes crewAddPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,90,0,0.0); }
+  50% { box-shadow: 0 0 22px 4px rgba(255,90,0,0.6); }
+}
+.crew-add-pulse { animation: crewAddPulse 1.4s ease-in-out infinite; }
+
+@keyframes crewPulseYellow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(234,179,8,0.0); }
+  50% { box-shadow: 0 0 14px 2px rgba(234,179,8,0.55); }
+}
+.crew-pulse-yellow { animation: crewPulseYellow 2.6s ease-in-out infinite; }
+
+@keyframes crewPulseOrange {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.0); }
+  50% { box-shadow: 0 0 16px 3px rgba(249,115,22,0.6); }
+}
+.crew-pulse-orange { animation: crewPulseOrange 1.5s ease-in-out infinite; }
+
+@keyframes crewPulseRed {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.0); transform: scale(1); }
+  50% { box-shadow: 0 0 18px 4px rgba(239,68,68,0.7); transform: scale(1.015); }
+}
+.crew-pulse-red { animation: crewPulseRed 0.75s ease-in-out infinite; }
+
+@keyframes crewDotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.35); }
+}
+.crew-dot-slow { animation: crewDotPulse 2.6s ease-in-out infinite; }
+.crew-dot-med { animation: crewDotPulse 1.5s ease-in-out infinite; }
+.crew-dot-fast { animation: crewDotPulse 0.75s ease-in-out infinite; }
+

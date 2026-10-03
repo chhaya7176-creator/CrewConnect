@@ -13,10 +13,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList, Bookmark, Pencil } from "lucide-react";
+import { Users, FileText, Navigation, History, Rocket, IndianRupee, MessageSquareWarning, FileScan, Globe, ClipboardList, Bookmark, Pencil, Ship } from "lucide-react";
 import { EditPostDialog } from "@/components/EditPostDialog";
 import { DataRights } from "@/components/DataRights";
 import { CompanyPlan } from "@/components/CompanyPlan";
+import { CrewPlanner } from "@/components/CrewPlanner";
 
 export default function Dashboard() {
   const { user, loading } = useAuth();
@@ -107,6 +108,7 @@ export default function Dashboard() {
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">
             <TabTrig value="matches" icon={Users}>Matches</TabTrig>
             <TabTrig value="browse" icon={Globe}>{providerReq ? "All Crew" : "All Vacancies"}</TabTrig>
+            {providerReq && <TabTrig value="crew-planner" icon={Ship}>Crew Planner</TabTrig>}
             {providerReq && <TabTrig value="saved" icon={Bookmark}>Saved Searches</TabTrig>}
             <TabTrig value="posts" icon={ClipboardList}>My Posts</TabTrig>
             <TabTrig value="documents" icon={FileText}>Documents</TabTrig>
@@ -122,6 +124,11 @@ export default function Dashboard() {
           <TabsContent value="browse" className="mt-6">
             <Matches browse onChange={loadDashboard} />
           </TabsContent>
+          {providerReq && (
+            <TabsContent value="crew-planner" className="mt-6">
+              <CrewPlanner />
+            </TabsContent>
+          )}
           {providerReq && (
             <TabsContent value="saved" className="mt-6">
               <SavedSearches onChange={loadDashboard} />
@@ -221,16 +228,9 @@ const MyPosts = ({ data, onChange }) => {
             <div><span className="text-[#8A8F9E] text-[10px] uppercase">US Visa</span><div className="font-data">{p.us_visa}</div></div>
             <div><span className="text-[#8A8F9E] text-[10px] uppercase">Availability</span><div className="font-data">{p.availability}</div></div>
           </div>
-          {isCompany && (p.vessel_name || p.port || (p.audits || []).length > 0) && (
-            <div className="mt-3 text-xs" data-testid={`post-audits-${p.id}`}>
-              {(p.vessel_name || p.port) && <div className="text-[#8A8F9E] mb-1">Vessel: {p.vessel_name || "—"} · Port: {p.port || "—"}</div>}
-              {(p.audits || []).length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {p.audits.map((a, i) => (
-                    <span key={i} className="text-[10px] bg-[#FF5A00]/20 border border-[#FF5A00]/40 text-[#FF7A2E] rounded-full px-2 py-0.5">{a.type} · {a.date}</span>
-                  ))}
-                </div>
-              )}
+          {isCompany && (p.vessel_name || p.port) && (
+            <div className="mt-3 text-xs" data-testid={`post-vessel-${p.id}`}>
+              <div className="text-[#8A8F9E]">Vessel: {p.vessel_name || "—"} · Port: {p.port || "—"}</div>
             </div>
           )}
           {p.boosted && <span className="inline-block mt-3 text-[10px] px-2 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">BOOSTED</span>}

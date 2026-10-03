@@ -1,8 +1,1 @@
-crons:
-  - name: audit-reminders
-    description: "Nudges companies 3/2/1 weeks before each scheduled vessel audit is due"
-    cron: "0 4 * * *"
-    endpoint: "{{BASE_URL}}/api/cron/audit-reminders"
-    method: POST
-    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
-    enabled: true
+crons: []

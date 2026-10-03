@@ -83,6 +83,14 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - **In-flow correction (#5)**: the Review step shows tappable chips for every answer — tap to jump back and fix any field, then return to the summary. Mobile & Email stay locked after OTP. (Plus the existing "↩ Correct last answer" and post-submit My Posts → Edit.)
 - Verified: cron auth 401/200 + fires at 21d + dedup; GST invoice split; solid pills screenshot.
 
+## Change (2026-09) — Audits REMOVED, Crew Planner ADDED
+- **Audits removed entirely** per user: dropped `audits` from `ProviderRequirement` + `provider_card`, deleted `/api/cron/audit-reminders` + `_days_until`, emptied `.emergent/crons.yml` (`crons: []`), removed audit UI from `EditPostDialog.jsx` and the audit chips in Dashboard `MyPosts`. No audit alerts/reminders anywhere.
+- **Crew Planner** (new company-only dashboard tab): plan crew changes. Stored in `crew_needs` collection.
+  - API: `POST /api/crew-needs`, `GET /api/crew-needs`, `DELETE /api/crew-needs/{id}` (auth-scoped per company).
+  - Fields: vessel_name, ranks[] (multi-select from config ranks), by_date (dd/mm/yyyy), port, note.
+  - UI (`CrewPlanner.jsx`): pulsing "Add Crew Requirement" CTA, crew-change **calendar** (due dates highlighted), **vessel-wise timeline**, **color-coded reminder log** — >30d green (steady), 15–30d yellow (slow pulse), 7–14d orange (medium pulse), <7d red (fast pulse). Pulse CSS in `index.css`.
+  - Verified: curl CRUD (create×3/list/delete) + screenshots at 1920 (tab, calendar+timeline, no overflow).
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).
