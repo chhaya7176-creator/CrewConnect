@@ -6,8 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { payFor } from "@/lib/pay";
 import { formatDateInput } from "@/lib/formatDate";
-import { Ship, MapPin, CalendarDays, Plus, Trash2, Anchor, BellRing } from "lucide-react";
+import { Ship, MapPin, CalendarDays, Plus, Trash2, Anchor, BellRing, Gift, Crown } from "lucide-react";
 
 const parseDMY = (s) => {
   const m = /^\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(s || "");
@@ -138,6 +139,8 @@ export const CrewPlanner = () => {
   const [needs, setNeeds] = useState([]);
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(new Date());
+  const [access, setAccess] = useState(null);
+  const [subBusy, setSubBusy] = useState(false);
 
   const load = async () => {
     try {
@@ -148,8 +151,24 @@ export const CrewPlanner = () => {
 
   useEffect(() => {
     api.get("/config").then((r) => setRanks(r.data?.crew_planner_ranks || r.data?.ranks || [])).catch(() => {});
+    api.get("/company/status").then((r) => setAccess(r.data?.crew_planner || null)).catch(() => {});
     load();
   }, []);
+
+  const subscribe = async () => {
+    setSubBusy(true);
+    try {
+      await payFor("subscription");
+      toast.success("Annual plan active 🎉");
+      const r = await api.get("/company/status");
+      setAccess(r.data?.crew_planner || null);
+      window.dispatchEvent(new Event("mc-status-changed"));
+    } catch (e) {
+      toast.error(e.message || "Payment cancelled");
+    } finally {
+      setSubBusy(false);
+    }
+  };
 
   const remove = async (id) => {
     try {
@@ -183,6 +202,8 @@ export const CrewPlanner = () => {
 
   const dueDates = useMemo(() => sorted.map((n) => parseDMY(n.by_date)).filter(Boolean), [sorted]);
 
+  const locked = access ? !access.access : false;
+
   return (
     <div className="space-y-6" data-testid="crew-planner">
       {/* Header + pulsing add */}
@@ -195,13 +216,38 @@ export const CrewPlanner = () => {
         </div>
         <Button
           onClick={() => setOpen(true)}
-          className="bg-[#FF5A00] hover:bg-[#E04F00] text-white font-semibold rounded-full gap-2 crew-add-pulse hover:-translate-y-0.5 transition-transform"
+          disabled={locked}
+          className="bg-[#FF5A00] hover:bg-[#E04F00] text-white font-semibold rounded-full gap-2 crew-add-pulse hover:-translate-y-0.5 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
           data-testid="crew-add-btn"
         >
           <Plus className="w-4 h-4" /> Add Crew Requirement
         </Button>
       </div>
 
+      {access?.via === "trial" && access?.access && (
+        <div className="flex items-center gap-2 rounded-xl border border-[#DFFF00]/40 bg-[#DFFF00]/5 px-4 py-2.5 text-sm" data-testid="crew-trial-banner">
+          <Gift className="w-4 h-4 text-[#DFFF00] shrink-0" />
+          <span className="text-[#E7EAF0]">Crew Planner is <b>free for your first 30 days</b> — <b>{access.trial_days_left} day{access.trial_days_left === 1 ? "" : "s"} left</b>. Afterwards it's part of the Annual Plan.</span>
+        </div>
+      )}
+      {access?.via === "subscription" && (
+        <div className="flex items-center gap-2 rounded-xl border border-[#DFFF00]/40 bg-[#DFFF00]/5 px-4 py-2.5 text-sm" data-testid="crew-sub-banner">
+          <Crown className="w-4 h-4 text-[#DFFF00] shrink-0" />
+          <span className="text-[#E7EAF0]">Included in your Annual Plan.</span>
+        </div>
+      )}
+
+      {locked ? (
+        <div className="rounded-2xl border border-[#FF5A00]/40 bg-gradient-to-br from-[#FF5A00]/12 to-transparent p-8 text-center" data-testid="crew-locked-gate">
+          <Crown className="w-8 h-8 text-[#FF7A2E] mx-auto mb-3" />
+          <h4 className="font-heading font-extrabold text-xl text-white mb-1">Your 30-day free Crew Planner trial has ended</h4>
+          <p className="text-sm text-[#C9CFDA] mb-5 max-w-md mx-auto">Crew Planner is part of the Company Annual Plan. Subscribe to keep planning crew changes with the calendar and colour-coded reminders.</p>
+          <Button onClick={subscribe} disabled={subBusy} className="bg-[#FF5A00] hover:bg-[#E04F00] rounded-full font-semibold" data-testid="crew-subscribe-btn">
+            {subBusy ? "Processing..." : "Unlock with Annual Plan · ₹1,99,000/yr"}
+          </Button>
+        </div>
+      ) : (
+      <>
       {/* Reminder log legend */}
       <div className="flex flex-wrap items-center gap-4 text-xs text-[#8A8F9E]">
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> Over 30 days</span>
@@ -293,6 +339,9 @@ export const CrewPlanner = () => {
           ))}
         </div>
       </div>
+
+      </>
+      )}
 
       <AddDialog open={open} onOpenChange={setOpen} ranks={ranks} onSaved={load} />
     </div>

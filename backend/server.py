@@ -548,6 +548,30 @@ async def is_subscribed(user_id: str) -> bool:
     return True
 
 
+CREW_PLANNER_TRIAL_DAYS = 30
+
+
+async def crew_planner_access(user_id: str) -> dict:
+    """Crew Planner is part of the Annual Plan, but free for the first 30 days from
+    first login (user.created_at) for every company — trial or paid tier."""
+    if await is_subscribed(user_id):
+        return {"access": True, "via": "subscription", "trial_days_left": 0, "trial_ends": None}
+    u = await db.users.find_one({"id": user_id}, {"_id": 0}) or {}
+    created = u.get("created_at")
+    try:
+        start = datetime.fromisoformat(created) if created else None
+    except ValueError:
+        start = None
+    if not start:
+        return {"access": False, "via": "none", "trial_days_left": 0, "trial_ends": None}
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    ends = start + timedelta(days=CREW_PLANNER_TRIAL_DAYS)
+    now = datetime.now(timezone.utc)
+    left = (ends.date() - now.date()).days
+    return {"access": now < ends, "via": "trial", "trial_days_left": max(0, left), "trial_ends": ends.isoformat()}
+
+
 async def company_is_paying(user_id: str) -> bool:
     """A company qualifies for proactive alerts once it is an engaged/paying customer:
     it has unlocked at least one CV, made a paid unlock, or holds a subscription."""
@@ -981,7 +1005,7 @@ async def company_status(user=Depends(get_current_user)):
     return {"subscribed": sub, "subscription_expiry": u.get("subscription_expiry"),
             "free_unlocks_left": max(0, FREE_UNLOCKS - used), "unlock_price": UNLOCK_PRICE,
             "subscription_price": SUBSCRIPTION_PRICE, "downloads_today": dl, "download_limit": 20,
-            "banner": banner}
+            "banner": banner, "crew_planner": await crew_planner_access(user["id"])}
 
 
 @api_router.post("/company/banner")
@@ -1011,6 +1035,9 @@ async def my_invoices(user=Depends(get_current_user)):
 
 @api_router.post("/crew-needs")
 async def create_crew_need(body: CrewNeedIn, user=Depends(get_current_user)):
+    acc = await crew_planner_access(user["id"])
+    if not acc["access"]:
+        raise HTTPException(status_code=403, detail="Your 30-day free Crew Planner trial has ended. It's part of the Annual Plan (₹1,99,000/yr) — subscribe to continue.")
     doc = body.model_dump()
     doc["id"] = str(uuid.uuid4())
     doc["user_id"] = user["id"]

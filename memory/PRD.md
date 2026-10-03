@@ -94,6 +94,11 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 ## Change (2026-09) — RPSL number field (company posting)
 - Company requirement ChatFlow now captures a **mandatory RPSL number** step placed after the mobile step and before OTP; OTP request moved so it fires only after RPSL is entered (`requestOtp` helper). Added `rpsl_number` to `ProviderRequirement` model (persisted). Added to review-recap chips. No verification yet (deferred per user). Verified via playwright: RPSL prompt shows after mobile, OTP only after RPSL.
 
+## Change (2026-09) — Crew Planner gating + billing emphasis
+- Crew Planner is now part of the Annual Plan but **free for 30 days from first login** (`user.created_at` + 30d) for every company tier (per-CV ₹29 or annual). Backend: `crew_planner_access(user_id)` helper (`CREW_PLANNER_TRIAL_DAYS=30`), exposed in `GET /api/company/status` as `crew_planner` `{access, via, trial_days_left, trial_ends}`; `POST /api/crew-needs` returns 403 when trial ended & not subscribed.
+- Frontend: Crew Planner dashboard tab is orange + pulsing (highlighted). CrewPlanner shows a trial banner (days left), a subscribed banner, or a locked gate with a Subscribe CTA; Add button disabled when locked. Verified: 403 expired / 200 fresh via curl + screenshots.
+- CompanyPlan card re-emphasised: bold hero "Just ₹29 per CV / contact" + "first 5 free"; annual plan downplayed to a small orange button "Annual plan · ₹1,99,000/yr"; removed "Unlimited contact unlocks" line.
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

@@ -108,7 +108,7 @@ export default function Dashboard() {
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">
             <TabTrig value="matches" icon={Users}>Matches</TabTrig>
             <TabTrig value="browse" icon={Globe}>{providerReq ? "All Crew" : "All Vacancies"}</TabTrig>
-            {providerReq && <TabTrig value="crew-planner" icon={Ship}>Crew Planner</TabTrig>}
+            {providerReq && <TabTrig value="crew-planner" icon={Ship} highlight>Crew Planner</TabTrig>}
             {providerReq && <TabTrig value="saved" icon={Bookmark}>Saved Searches</TabTrig>}
             <TabTrig value="posts" icon={ClipboardList}>My Posts</TabTrig>
             <TabTrig value="documents" icon={FileText}>Documents</TabTrig>
@@ -167,10 +167,10 @@ const StatCard = ({ icon: Icon, label, value, accent }) => (
   </div>
 );
 
-const TabTrig = ({ value, icon: Icon, children }) => (
+const TabTrig = ({ value, icon: Icon, children, highlight }) => (
   <TabsTrigger
     value={value}
-    className="data-[state=active]:bg-[#FF5A00] data-[state=active]:text-white text-[#8A8F9E] gap-2 rounded-lg"
+    className={`data-[state=active]:bg-[#FF5A00] data-[state=active]:text-white gap-2 rounded-lg ${highlight ? "bg-[#FF5A00] text-white crew-add-pulse" : "text-[#8A8F9E]"}`}
     data-testid={`tab-${value}`}
   >
     <Icon className="w-4 h-4" /> {children}
