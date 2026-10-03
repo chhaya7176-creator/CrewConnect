@@ -254,10 +254,27 @@ export const ChatFlow = () => {
     }
     // conditional: custom availability date
     if (s.key === "availability" && value === "Custom date") {
-      const newFlow = [...flow];
-      newFlow.splice(idx + 1, 0, { key: "availability_date", bot: "Enter the date (DD/MM/YYYY).", type: "text", placeholder: "DD/MM/YYYY", format: "date" });
+      const newFlow = flow.filter((f) => f.key !== "availability_date");
+      const ai = newFlow.findIndex((f) => f.key === "availability");
+      newFlow.splice(ai + 1, 0, { key: "availability_date", bot: "Enter the date (DD/MM/YYYY).", type: "text", placeholder: "DD/MM/YYYY", format: "date" });
       setFlow(newFlow);
-      advance(newFlow, idx);
+      setForm((f) => ({ ...f, availability: value, availability_date: "" }));
+      setIdx(ai + 1);
+      pushBotStep(newFlow[ai + 1]);
+      return;
+    }
+    // availability changed to a non-custom value -> drop any stale date step
+    if (s.key === "availability") {
+      const cleaned = flow.filter((f) => f.key !== "availability_date");
+      const ai = cleaned.findIndex((f) => f.key === "availability");
+      const nf = { ...form, availability: value };
+      delete nf.availability_date;
+      setForm(nf);
+      setFlow(cleaned);
+      const next = cleaned[ai + 1];
+      setIdx(ai + 1);
+      pushBotStep(next);
+      if (next && next.type === "review") genSummary(nf);
       return;
     }
 
