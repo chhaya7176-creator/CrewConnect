@@ -50,6 +50,7 @@ const buildProviderSteps = (cfg) => [
   { key: "coc", bot: "Which COC issuing countries/authorities are acceptable? Select all that apply — crew holding any of the following will be matched.", type: "multiselect", options: cfg.coc_provider },
   { key: "us_visa", bot: "US Visa requirement for this role?", type: "quick", options: cfg.us_visa_provider },
   { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
+  { key: "rpsl_number", bot: "Enter your company's RPSL (Recruitment &amp; Placement Services Licence) number. This is mandatory to post a requirement.", type: "text", placeholder: "e.g. RPSL-MUM-162077" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
   { key: "consent", bot: "We'll use your company &amp; requirement details <b>only</b> to match you with relevant seafarers and notify them. You can withdraw consent and request deletion anytime (see Privacy Policy). Do you consent?", type: "quick", options: ["Yes", "No"] },
   { key: "company_name", bot: "What is your company name?", type: "text", placeholder: "Company name" },
@@ -154,6 +155,16 @@ export const ChatFlow = () => {
 
   const step = flow[idx];
 
+  const requestOtp = async (mobileVal) => {
+    try {
+      const res = await api.post("/auth/request-otp", { mobile: mobileVal });
+      advance(flow, idx);
+      setTimeout(() => addBot(`(Demo mode) Your OTP is *${res.data.demo_otp}*`), 700);
+    } catch (e) {
+      addBot("⚠️ " + (e.response?.data?.detail || "Failed to send OTP."));
+    }
+  };
+
   const handleCvUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -177,8 +188,8 @@ export const ChatFlow = () => {
 
   const [editReturn, setEditReturn] = useState(null);
 
-  const CHIP_KEYS = ["rank", "vessel_type", "sea_time", "sea_time_priority", "coc", "coc_priority", "us_visa", "us_visa_priority", "availability", "availability_priority", "name", "company_name", "vessel_name", "port", "other_visa"];
-  const chipLabel = (k) => ({ rank: "Rank", vessel_type: "Vessel type", sea_time: "Sea time", sea_time_priority: "Sea-time priority", coc: "COC", coc_priority: "COC priority", us_visa: "US visa", us_visa_priority: "US-visa priority", availability: "Availability", availability_priority: "Availability priority", name: "Name", company_name: "Company", vessel_name: "Vessel name", port: "Port", other_visa: "Other visa" }[k] || k);
+  const CHIP_KEYS = ["rank", "vessel_type", "sea_time", "sea_time_priority", "coc", "coc_priority", "us_visa", "us_visa_priority", "availability", "availability_priority", "name", "company_name", "vessel_name", "port", "other_visa", "rpsl_number"];
+  const chipLabel = (k) => ({ rank: "Rank", vessel_type: "Vessel type", sea_time: "Sea time", sea_time_priority: "Sea-time priority", coc: "COC", coc_priority: "COC priority", us_visa: "US visa", us_visa_priority: "US-visa priority", availability: "Availability", availability_priority: "Availability priority", name: "Name", company_name: "Company", vessel_name: "Vessel name", port: "Port", other_visa: "Other visa", rpsl_number: "RPSL number" }[k] || k);
   const editField = (key) => {
     const j = flow.findIndex((f) => f.key === key);
     if (j < 0) return;
@@ -265,19 +276,27 @@ export const ChatFlow = () => {
       return;
     }
 
-    // mobile -> send OTP
+    // mobile -> send OTP (unless a field like RPSL comes before the OTP step)
     if (s.key === "mobile") {
       const digits = value.replace(/\D/g, "");
       if (digits.length < 10 || digits.length > 15) {
         addBot("⚠️ Please enter a valid mobile number (10–15 digits with country code).");
         return;
       }
-      try {
-        const res = await api.post("/auth/request-otp", { mobile: value });
+      if (flow[idx + 1]?.type === "otp") {
+        await requestOtp(value);
+      } else {
         advance(flow, idx);
-        setTimeout(() => addBot(`(Demo mode) Your OTP is *${res.data.demo_otp}*`), 700);
-      } catch (e) {
-        addBot("⚠️ " + (e.response?.data?.detail || "Failed to send OTP."));
+      }
+      return;
+    }
+
+    // RPSL number captured -> request OTP if that's the next step
+    if (s.key === "rpsl_number") {
+      if (flow[idx + 1]?.type === "otp") {
+        await requestOtp(newForm.mobile);
+      } else {
+        advance(flow, idx);
       }
       return;
     }

@@ -91,6 +91,9 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
   - UI (`CrewPlanner.jsx`): pulsing "Add Crew Requirement" CTA, crew-change **calendar** (due dates highlighted), **vessel-wise timeline**, **color-coded reminder log** — >30d green (steady), 15–30d yellow (slow pulse), 7–14d orange (medium pulse), <7d red (fast pulse). Pulse CSS in `index.css`.
   - Verified: curl CRUD (create×3/list/delete) + screenshots at 1920 (tab, calendar+timeline, no overflow).
 
+## Change (2026-09) — RPSL number field (company posting)
+- Company requirement ChatFlow now captures a **mandatory RPSL number** step placed after the mobile step and before OTP; OTP request moved so it fires only after RPSL is entered (`requestOtp` helper). Added `rpsl_number` to `ProviderRequirement` model (persisted). Added to review-recap chips. No verification yet (deferred per user). Verified via playwright: RPSL prompt shows after mobile, OTP only after RPSL.
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

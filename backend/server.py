@@ -194,6 +194,7 @@ class ProviderRequirement(BaseModel):
     summary: Optional[str] = ""
     vessel_name: Optional[str] = ""
     port: Optional[str] = ""
+    rpsl_number: Optional[str] = ""
 
 
 class CrewNeedIn(BaseModel):
