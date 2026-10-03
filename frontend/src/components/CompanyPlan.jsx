@@ -74,9 +74,8 @@ export const CompanyPlan = () => {
           <span className="text-[#C9CFDA]">Optional annual plan</span> · 20 Standard CV downloads/day · featured home-page banner
         </div>
         <Button
-          variant="outline"
           size="sm"
-          className="rounded-full border-white/15 bg-transparent text-[#8A8F9E] hover:text-white hover:bg-white/5 h-8 px-3 text-xs"
+          className="rounded-full bg-[#FF5A00] hover:bg-[#E04F00] text-white h-8 px-4 text-xs font-semibold"
           disabled={busy}
           onClick={subscribe}
           data-testid="subscribe-btn"
