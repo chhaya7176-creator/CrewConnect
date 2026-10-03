@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { payFor } from "@/lib/pay";
-import { Crown, Check, Megaphone } from "lucide-react";
+import { Crown, Megaphone, IndianRupee } from "lucide-react";
 
 export const CompanyPlan = () => {
   const [st, setSt] = useState(null);
@@ -56,20 +56,34 @@ export const CompanyPlan = () => {
   }
 
   return (
-    <div className="rounded-2xl border border-[#FF5A00]/40 bg-gradient-to-br from-[#FF5A00]/12 to-transparent p-5 sm:p-6 mb-6" data-testid="company-plan-upgrade">
-      <div className="flex items-center gap-2 mb-2">
-        <Crown className="w-5 h-5 text-[#FF7A2E]" />
-        <h3 className="font-heading font-extrabold text-xl text-white">Company Annual Plan — ₹1,99,000/yr</h3>
+    <div className="rounded-2xl border border-white/10 bg-[#0A0B12] p-5 sm:p-6 mb-6" data-testid="company-plan-upgrade">
+      {/* Hero: pay-per-CV is the headline offer */}
+      <div className="rounded-xl border-2 border-[#FF5A00]/60 bg-gradient-to-br from-[#FF5A00]/20 to-transparent p-5" data-testid="per-cv-highlight">
+        <div className="flex items-center gap-2 mb-1.5">
+          <IndianRupee className="w-6 h-6 text-[#FF7A2E]" />
+          <h3 className="font-heading font-extrabold text-2xl sm:text-3xl text-white">Just ₹29 per CV / contact</h3>
+        </div>
+        <p className="text-base font-bold text-[#FFB38A]" data-testid="per-cv-tagline">
+          Your first 5 contact unlocks are FREE — then only ₹29 per profile.
+        </p>
       </div>
-      <ul className="text-sm text-[#E7EAF0] space-y-1.5 mb-4">
-        <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#25D366]" /> Unlimited contact unlocks (no ₹29 per profile)</li>
-        <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#25D366]" /> Download 20 CVs/day in one Standard format</li>
-        <li className="flex items-center gap-2"><Check className="w-4 h-4 text-[#25D366]" /> Featured company banner on the home page</li>
-      </ul>
-      <p className="text-xs text-[#8A8F9E] mb-4">Otherwise: your first 5 contact unlocks are free, then ₹29 per profile.</p>
-      <Button className="bg-[#FF5A00] hover:bg-[#E04F00] rounded-full" disabled={busy} onClick={subscribe} data-testid="subscribe-btn">
-        {busy ? "Processing..." : "Subscribe — ₹1,99,000 / year"}
-      </Button>
+
+      {/* Understated optional annual plan */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 pt-4 border-t border-white/5">
+        <div className="text-xs text-[#8A8F9E] leading-relaxed">
+          <span className="text-[#C9CFDA]">Optional annual plan</span> · 20 Standard CV downloads/day · featured home-page banner
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full border-white/15 bg-transparent text-[#8A8F9E] hover:text-white hover:bg-white/5 h-8 px-3 text-xs"
+          disabled={busy}
+          onClick={subscribe}
+          data-testid="subscribe-btn"
+        >
+          {busy ? "Processing..." : "Annual plan · ₹1,99,000/yr"}
+        </Button>
+      </div>
     </div>
   );
 };
