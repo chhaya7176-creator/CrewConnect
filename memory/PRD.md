@@ -112,6 +112,10 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Frontend: seafarer-facing vacancy cards (Matches + NearMatches) show an amber **"Non-RPSL Company"** badge when `is_rpsl === false`. `requestOtp(curFlow, curIdx, mobile)` refactored to support the inserted gate step.
 - Verified: curl (is_rpsl=false stored, no rpsl_number) + playwright (No path note/skip/OTP/company-name; seeker badge visible).
 
+## Change (2026-10) — Hero image refresh + RPSL correction on edit
+- Home hero: swapped `SEA_BG` to a crisp high-res aerial container-ship photo (Unsplash, w=2400, q=90) and lightened the overlay gradient (bottom 0.72→0.50, mid 0.26→0.12, top 0.06→0.02) so the ship is much more visible. Verified desktop + mobile (390px, no overflow).
+- RPSL correction: `EditPostDialog` now shows an editable **RPSL number** field for RPSL companies (company name shown read-only, verified-from-RPSL); Non-RPSL companies keep an editable company-name field. `PUT /api/provider/requirement/{id}` re-verifies the RPSL on save — valid → refreshes `company_name` + canonical `rpsl_number`; invalid → 400. Verified via curl (valid correction updates company, invalid rejected) .
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

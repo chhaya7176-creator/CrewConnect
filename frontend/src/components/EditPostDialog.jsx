@@ -65,6 +65,8 @@ export const EditPostDialog = ({ open, onOpenChange, post, isCompany, onSaved })
           summary: form.summary || "",
           vessel_name: form.vessel_name || "",
           port: form.port || "",
+          rpsl_number: form.rpsl_number || "",
+          is_rpsl: form.is_rpsl !== false,
         };
         await api.put(`/provider/requirement/${post.id}`, payload);
       } else {
@@ -101,18 +103,29 @@ export const EditPostDialog = ({ open, onOpenChange, post, isCompany, onSaved })
         </DialogHeader>
 
         <div className="grid sm:grid-cols-2 gap-4 pt-1">
-          {isCompany ? (
+          {!isCompany ? (
+            <Fld label="Full name">
+              <Input className="bg-black/30 border-white/10" value={form.name || ""} onChange={(e) => set("name", e.target.value)} data-testid="edit-name" />
+            </Fld>
+          ) : form.is_rpsl === false ? (
             <Fld label="Company name">
               <Input className="bg-black/30 border-white/10" value={form.company_name || ""} onChange={(e) => set("company_name", e.target.value)} data-testid="edit-company-name" />
             </Fld>
           ) : (
-            <Fld label="Full name">
-              <Input className="bg-black/30 border-white/10" value={form.name || ""} onChange={(e) => set("name", e.target.value)} data-testid="edit-name" />
+            <Fld label="RPSL number (re-verified on save)">
+              <Input className="bg-black/30 border-white/10 font-data" value={form.rpsl_number || ""} onChange={(e) => set("rpsl_number", e.target.value)} placeholder="e.g. RPSL-MUM-162077" data-testid="edit-rpsl-number" />
             </Fld>
           )}
           <Fld label="Email">
             <Input className="bg-black/30 border-white/10" value={form.email || ""} onChange={(e) => set("email", e.target.value)} data-testid="edit-email" />
           </Fld>
+          {isCompany && form.is_rpsl !== false && (
+            <div className="sm:col-span-2">
+              <Fld label="Company name (verified from RPSL)">
+                <Input disabled className="bg-black/20 border-white/10 text-[#8A8F9E]" value={form.company_name || ""} data-testid="edit-company-name-readonly" />
+              </Fld>
+            </div>
+          )}
 
           <Fld label="Rank">
             <Dropdown value={form.rank} onChange={(v) => set("rank", v)} options={cfg?.ranks} testId="edit-rank" />

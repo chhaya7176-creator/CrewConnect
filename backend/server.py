@@ -476,7 +476,18 @@ async def update_provider(req_id: str, req: ProviderRequirement, user=Depends(ge
     existing = await db.providers.find_one({"id": req_id, "user_id": user["id"]}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Requirement not found")
-    await db.providers.update_one({"id": req_id}, {"$set": req.model_dump()})
+    updates = req.model_dump()
+    # RPSL companies: re-verify the (possibly corrected) RPSL number and refresh company name
+    if updates.get("is_rpsl", True) and (updates.get("rpsl_number") or "").strip():
+        k = _rpsl_norm(updates["rpsl_number"])
+        rec = RPSL_LOOKUP.get(k)
+        if not rec and not k.startswith("RPSL"):
+            rec = RPSL_LOOKUP.get("RPSL" + k)
+        if not rec:
+            raise HTTPException(status_code=400, detail="This RPSL number isn't in the DG Shipping approved registry. Please enter a valid RPSL number.")
+        updates["company_name"] = rec["company"]
+        updates["rpsl_number"] = rec["license"]
+    await db.providers.update_one({"id": req_id}, {"$set": updates})
     doc = await db.providers.find_one({"id": req_id}, {"_id": 0})
     await notify_company_of_boosted_matches(doc)
     return doc

@@ -5,7 +5,7 @@ import { ChatFlow } from "@/components/ChatFlow";
 import { HomeBanners } from "@/components/HomeBanners";
 import { ShieldCheck, Zap, IndianRupee, Users, TrendingUp, FileCheck2 } from "lucide-react";
 
-const SEA_BG = "https://static.prod-images.emergentagent.com/jobs/73dfd5f5-2c66-45fa-b175-89ba7a0303b2/images/07a6b47f6021204a8f54a17e0c6c17007f53b73bc1e2e2a5f074a57c776d0174.jpeg";
+const SEA_BG = "https://images.unsplash.com/photo-1724597500306-a4cbb7d1324e?crop=entropy&cs=srgb&fm=jpg&q=90&w=2400&ixlib=rb-4.1.0";
 
 const STATS = [
   { label: "Active Seafarers", value: "12,400+", icon: Users },
@@ -26,7 +26,7 @@ export default function Home() {
   return (
     <div className="min-h-screen relative">
       <div className="fixed inset-0 z-0 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${SEA_BG})` }} />
-      <div className="fixed inset-0 z-0" style={{ background: "linear-gradient(180deg, rgba(8,12,22,0.06) 0%, rgba(6,11,20,0.26) 52%, rgba(3,8,16,0.72) 100%)" }} />
+      <div className="fixed inset-0 z-0" style={{ background: "linear-gradient(180deg, rgba(8,12,22,0.02) 0%, rgba(6,11,20,0.12) 52%, rgba(3,8,16,0.50) 100%)" }} />
       <Navbar onLogin={() => setLoginOpen(true)} />
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
       <HomeBanners />
