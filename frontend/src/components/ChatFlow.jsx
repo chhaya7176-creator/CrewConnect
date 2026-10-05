@@ -50,6 +50,7 @@ const buildProviderSteps = (cfg) => [
   { key: "coc", bot: "Which COC issuing countries/authorities are acceptable? Select all that apply — crew holding any of the following will be matched.", type: "multiselect", options: cfg.coc_provider },
   { key: "us_visa", bot: "US Visa requirement for this role?", type: "quick", options: cfg.us_visa_provider },
   { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
+  { key: "is_rpsl", bot: "Are you an RPSL-valid company (licensed by DG Shipping)?", type: "dropdown", options: ["Yes", "No"] },
   { key: "rpsl_number", bot: "Enter your company's RPSL (Recruitment &amp; Placement Services Licence) number. We'll verify it against the DG Shipping approved list and fetch your company name.", type: "text", placeholder: "e.g. RPSL-MUM-162077" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
   { key: "consent", bot: "We'll use your company &amp; requirement details <b>only</b> to match you with relevant seafarers and notify them. You can withdraw consent and request deletion anytime (see Privacy Policy). Do you consent?", type: "quick", options: ["Yes", "No"] },
@@ -155,10 +156,10 @@ export const ChatFlow = () => {
 
   const step = flow[idx];
 
-  const requestOtp = async (mobileVal) => {
+  const requestOtp = async (curFlow, curIdx, mobileVal) => {
     try {
       const res = await api.post("/auth/request-otp", { mobile: mobileVal });
-      advance(flow, idx);
+      advance(curFlow, curIdx);
       setTimeout(() => addBot(`(Demo mode) Your OTP is *${res.data.demo_otp}*`), 700);
     } catch (e) {
       addBot("⚠️ " + (e.response?.data?.detail || "Failed to send OTP."));
@@ -301,9 +302,25 @@ export const ChatFlow = () => {
         return;
       }
       if (flow[idx + 1]?.type === "otp") {
-        await requestOtp(value);
+        await requestOtp(flow, idx, value);
       } else {
         advance(flow, idx);
+      }
+      return;
+    }
+
+    // RPSL-valid company gate (asked right before the RPSL number step)
+    if (s.key === "is_rpsl") {
+      const yes = value === "Yes";
+      const nf = { ...form, is_rpsl: yes };
+      setForm(nf);
+      if (yes) {
+        advance(flow, idx);   // -> RPSL number step
+      } else {
+        const cleaned = flow.filter((f) => f.key !== "rpsl_number");
+        setFlow(cleaned);
+        addBot("Noted — your company will be listed as a Non-RPSL company.");
+        await requestOtp(cleaned, idx, nf.mobile);
       }
       return;
     }
@@ -327,7 +344,7 @@ export const ChatFlow = () => {
       setFlow((prev) => prev.filter((f) => f.key !== "company_name"));
       addBot(`✅ RPSL verified — ${company}`);
       if (flow[idx + 1]?.type === "otp") {
-        await requestOtp(nf.mobile);
+        await requestOtp(flow, idx, nf.mobile);
       } else {
         advance(flow, idx);
       }

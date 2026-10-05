@@ -106,6 +106,12 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - NOTE: dataset is the 437-row approved list the user supplied (DataTables showed 538 valid total) — numbers outside this file are rejected. Refresh by re-parsing an updated export into `rpsl_registry.json`.
 - Verified: curl (exact/alt/slash/invalid) + full playwright flow (invalid rejected, valid verified + auto-fill, company-name step skipped).
 
+## Change (2026-10) — RPSL-valid gate (Yes/No) + Non-RPSL label
+- Company posting flow asks **"Are you an RPSL-valid company?"** (dropdown Yes/No) right after mobile, before the RPSL number step. **Yes** → existing RPSL verify + auto-fill. **No** → RPSL number step removed, proceeds to OTP, company name asked normally; record flagged `is_rpsl=false`.
+- Backend: `is_rpsl` (default True) on `ProviderRequirement`; exposed in `provider_card` → seeker matches/near/browse all carry it.
+- Frontend: seafarer-facing vacancy cards (Matches + NearMatches) show an amber **"Non-RPSL Company"** badge when `is_rpsl === false`. `requestOtp(curFlow, curIdx, mobile)` refactored to support the inserted gate step.
+- Verified: curl (is_rpsl=false stored, no rpsl_number) + playwright (No path note/skip/OTP/company-name; seeker badge visible).
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

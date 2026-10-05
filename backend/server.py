@@ -226,6 +226,7 @@ class ProviderRequirement(BaseModel):
     vessel_name: Optional[str] = ""
     port: Optional[str] = ""
     rpsl_number: Optional[str] = ""
+    is_rpsl: Optional[bool] = True
 
 
 class CrewNeedIn(BaseModel):
@@ -714,6 +715,7 @@ def provider_card(p: dict, elig: bool) -> dict:
         "summary": p.get("summary", ""),
         "vessel_name": p.get("vessel_name", ""),
         "port": p.get("port", ""),
+        "is_rpsl": p.get("is_rpsl", True),
     }
 
 

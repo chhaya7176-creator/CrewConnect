@@ -68,6 +68,9 @@ const NearMatches = ({ items, role }) => {
               <div>
                 <div className="font-heading font-bold leading-tight">{isProvider ? it.rank : it.company_name}</div>
                 {!isProvider && <div className="text-xs text-[#8A8F9E]">{it.rank}</div>}
+                {!isProvider && it.is_rpsl === false && (
+                  <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/40 font-semibold" data-testid={`non-rpsl-badge-${it.id}`}>Non-RPSL Company</span>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -402,6 +405,9 @@ export const Matches = ({ browse = false, onChange }) => {
                 <div>
                   <div className={`font-heading font-bold leading-tight ${!eligible ? "text-[#8A8F9E]" : ""}`}>{p.company_name}</div>
                   <div className="text-xs text-[#8A8F9E]">{p.rank}</div>
+                  {p.is_rpsl === false && (
+                    <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/40 font-semibold" data-testid={`non-rpsl-badge-${p.id}`}>Non-RPSL Company</span>
+                  )}
                 </div>
               </div>
               {p.summary && <p className="text-xs text-[#8A8F9E] mb-4">{p.summary}</p>}
