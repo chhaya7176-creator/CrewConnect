@@ -50,7 +50,7 @@ const buildProviderSteps = (cfg) => [
   { key: "coc", bot: "Which COC issuing countries/authorities are acceptable? Select all that apply — crew holding any of the following will be matched.", type: "multiselect", options: cfg.coc_provider },
   { key: "us_visa", bot: "US Visa requirement for this role?", type: "quick", options: cfg.us_visa_provider },
   { key: "mobile", bot: "Pick your country and enter your mobile number for OTP verification.", type: "mobile", placeholder: "Mobile number" },
-  { key: "rpsl_number", bot: "Enter your company's RPSL (Recruitment &amp; Placement Services Licence) number. This is mandatory to post a requirement.", type: "text", placeholder: "e.g. RPSL-MUM-162077" },
+  { key: "rpsl_number", bot: "Enter your company's RPSL (Recruitment &amp; Placement Services Licence) number. We'll verify it against the DG Shipping approved list and fetch your company name.", type: "text", placeholder: "e.g. RPSL-MUM-162077" },
   { key: "otp", bot: "Enter the 6-digit OTP you received.", type: "otp" },
   { key: "consent", bot: "We'll use your company &amp; requirement details <b>only</b> to match you with relevant seafarers and notify them. You can withdraw consent and request deletion anytime (see Privacy Policy). Do you consent?", type: "quick", options: ["Yes", "No"] },
   { key: "company_name", bot: "What is your company name?", type: "text", placeholder: "Company name" },
@@ -188,7 +188,7 @@ export const ChatFlow = () => {
 
   const [editReturn, setEditReturn] = useState(null);
 
-  const CHIP_KEYS = ["rank", "vessel_type", "sea_time", "sea_time_priority", "coc", "coc_priority", "us_visa", "us_visa_priority", "availability", "availability_priority", "name", "company_name", "vessel_name", "port", "other_visa", "rpsl_number"];
+  const CHIP_KEYS = ["rank", "vessel_type", "sea_time", "sea_time_priority", "coc", "coc_priority", "us_visa", "us_visa_priority", "availability", "availability_priority", "name", "vessel_name", "port", "other_visa"];
   const chipLabel = (k) => ({ rank: "Rank", vessel_type: "Vessel type", sea_time: "Sea time", sea_time_priority: "Sea-time priority", coc: "COC", coc_priority: "COC priority", us_visa: "US visa", us_visa_priority: "US-visa priority", availability: "Availability", availability_priority: "Availability priority", name: "Name", company_name: "Company", vessel_name: "Vessel name", port: "Port", other_visa: "Other visa", rpsl_number: "RPSL number" }[k] || k);
   const editField = (key) => {
     const j = flow.findIndex((f) => f.key === key);
@@ -308,10 +308,26 @@ export const ChatFlow = () => {
       return;
     }
 
-    // RPSL number captured -> request OTP if that's the next step
+    // RPSL number captured -> verify against DG Shipping list, auto-fill company name
     if (s.key === "rpsl_number") {
+      let res;
+      try {
+        res = await api.get("/rpsl/verify", { params: { number: value } });
+      } catch {
+        addBot("⚠️ Couldn't verify the RPSL number right now. Please try again.");
+        return;
+      }
+      if (!res.data?.found) {
+        addBot("⚠️ This RPSL number isn't in the DG Shipping approved registry. Please enter a valid RPSL number to proceed.");
+        return;
+      }
+      const company = res.data.company_name;
+      const nf = { ...form, rpsl_number: res.data.license || value, company_name: company };
+      setForm(nf);
+      setFlow((prev) => prev.filter((f) => f.key !== "company_name"));
+      addBot(`✅ RPSL verified — ${company}`);
       if (flow[idx + 1]?.type === "otp") {
-        await requestOtp(newForm.mobile);
+        await requestOtp(nf.mobile);
       } else {
         advance(flow, idx);
       }

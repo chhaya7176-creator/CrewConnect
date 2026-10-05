@@ -99,6 +99,13 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Frontend: Crew Planner dashboard tab is orange + pulsing (highlighted). CrewPlanner shows a trial banner (days left), a subscribed banner, or a locked gate with a Subscribe CTA; Add button disabled when locked. Verified: 403 expired / 200 fresh via curl + screenshots.
 - CompanyPlan card re-emphasised: bold hero "Just ₹29 per CV / contact" + "first 5 free"; annual plan downplayed to a small orange button "Annual plan · ₹1,99,000/yr"; removed "Unlimited contact unlocks" line.
 
+## Change (2026-10) — RPSL verification + auto-fill (company posting)
+- Parsed the 5 DG Shipping PDFs (approved/valid list) into `/app/backend/data/rpsl_registry.json` (**437 entries**: license → company). Parser: pymupdf text + regex on license tokens, name cleanup.
+- Backend: loads registry at startup into `RPSL_LOOKUP` (primary + alt keys so users can type with/without the `RPSL` prefix and any `-`/`/` spacing). Endpoint `GET /api/rpsl/verify?number=...` → `{found, company_name, license}`. Normalisation strips non-alphanumerics, uppercases.
+- ChatFlow (company): the mandatory RPSL step now **verifies** on entry. Not found → blocked with an error (cannot proceed). Found → auto-fills & locks `company_name`, shows "✅ RPSL verified — <Company>", removes the later company-name question, then requests OTP. `company_name`/`rpsl_number` removed from editable review chips (registry-authoritative).
+- NOTE: dataset is the 437-row approved list the user supplied (DataTables showed 538 valid total) — numbers outside this file are rejected. Refresh by re-parsing an updated export into `rpsl_registry.json`.
+- Verified: curl (exact/alt/slash/invalid) + full playwright flow (invalid rejected, valid verified + auto-fill, company-name step skipped).
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

@@ -39,6 +39,37 @@ GRIEVANCE_OFFICER = {
     "role": "Grievance Officer / Data Protection Contact",
 }
 
+
+# ---------------- RPSL registry (DG Shipping approved/valid list) ----------------
+def _rpsl_norm(s: str) -> str:
+    return re.sub(r'[^A-Z0-9]', '', (s or '').upper())
+
+
+def _load_rpsl_registry():
+    path = ROOT_DIR / 'data' / 'rpsl_registry.json'
+    lookup = {}
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return lookup
+    for e in data.get('entries', []):
+        lic, company = e.get('license', ''), e.get('company', '')
+        if not lic or not company:
+            continue
+        k = _rpsl_norm(lic)
+        rec = {"license": lic, "company": company}
+        lookup.setdefault(k, rec)
+        # alt key so users can type with/without the RPSL prefix (e.g. "CHN-003" or "MUM-278")
+        if k.startswith('RPSL'):
+            lookup.setdefault(k[4:], rec)
+        else:
+            lookup.setdefault('RPSL' + k, rec)
+    return lookup
+
+
+RPSL_LOOKUP = _load_rpsl_registry()
+
 # ---------------- Object storage ----------------
 STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
@@ -1031,6 +1062,17 @@ async def get_banners():
 async def my_invoices(user=Depends(get_current_user)):
     rows = await db.invoices.find({"user_id": user["id"]}, {"_id": 0}).sort("at", -1).to_list(100)
     return {"invoices": rows}
+
+
+@api_router.get("/rpsl/verify")
+async def rpsl_verify(number: str = Query("")):
+    k = _rpsl_norm(number)
+    rec = RPSL_LOOKUP.get(k)
+    if not rec and k and not k.startswith('RPSL'):
+        rec = RPSL_LOOKUP.get('RPSL' + k)
+    if not rec:
+        return {"found": False}
+    return {"found": True, "company_name": rec["company"], "license": rec["license"]}
 
 
 @api_router.post("/crew-needs")
