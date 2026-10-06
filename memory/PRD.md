@@ -116,6 +116,11 @@ WhatsApp + web platform connecting seafarer job seekers with shipping companies 
 - Home hero: swapped `SEA_BG` to a crisp high-res aerial container-ship photo (Unsplash, w=2400, q=90) and lightened the overlay gradient (bottom 0.72→0.50, mid 0.26→0.12, top 0.06→0.02) so the ship is much more visible. Verified desktop + mobile (390px, no overflow).
 - RPSL correction: `EditPostDialog` now shows an editable **RPSL number** field for RPSL companies (company name shown read-only, verified-from-RPSL); Non-RPSL companies keep an editable company-name field. `PUT /api/provider/requirement/{id}` re-verifies the RPSL on save — valid → refreshes `company_name` + canonical `rpsl_number`; invalid → 400. Verified via curl (valid correction updates company, invalid rejected) .
 
+## Change (2026-10) — Match % ranking (all postings) + clickable banners
+- **Match %**: new equal-weight scoring across 6 criteria (Rank, Vessel, Sea time, COC, US visa, Availability) → `match_score()` in server.py. `/matches` and `/browse` now return **ALL** counterparty postings (not just exact), each with `match_pct`, sorted descending. Frontend shows a colour-coded "X% Match" badge (green ≥80, yellow ≥50, grey <50) on every crew & company card. `near_matches` retired (empty).
+- **Clickable banners**: `/banners` now returns `company_id` (the provider's user_id). Home banners are buttons → navigate to `/dashboard?company=<id>`. Dashboard reads `?company=` → opens "All Vacancies" tab filtered to that company via `/browse?company=<id>`; seeker view shows a "Showing postings by <name>" banner with a "Show all" clear button.
+- Verified via curl: /matches 91 postings sorted desc (100,83…), /browse has match_pct, /browse?company filters to 1 (Neptune Shipping), banners carry company_id; screenshot confirms badges render. (Self-tested; testing_agent skipped per user's cost sensitivity.)
+
 ## Known / Backlog
 - Real UPI/QR + card payments for ₹499 need an India gateway (Razorpay recommended, or user's own Indian Stripe key) — currently MOCK.
 - Real automated WhatsApp/email outbound to companies needs WhatsApp Business API + Resend — currently SIMULATED (shows matching companies).

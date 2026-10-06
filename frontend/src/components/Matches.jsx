@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Empty } from "@/pages/Dashboard";
-import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift, Lightbulb, Download } from "lucide-react";
+import { Lock, Unlock, IndianRupee, Ship, Building2, Anchor, MessageCircle, Share2, Users, CheckCircle2, Gift, Lightbulb, Download, X } from "lucide-react";
 import { payFor } from "@/lib/pay";
 import { MatchAlerts } from "@/components/MatchAlerts";
 import { GetNoticedFaster } from "@/components/GetNoticedFaster";
@@ -45,6 +46,20 @@ const GapTags = ({ gaps }) =>
       ))}
     </div>
   ) : null;
+
+const MatchBadge = ({ pct }) => {
+  if (pct == null) return null;
+  const color = pct >= 80 ? "#25D366" : pct >= 50 ? "#DFFF00" : "#8A8F9E";
+  return (
+    <span
+      className="text-[11px] font-bold font-data px-2.5 py-1 rounded-full border shrink-0"
+      style={{ color, borderColor: `${color}66`, backgroundColor: `${color}1a` }}
+      data-testid={`match-pct-${pct}`}
+    >
+      {pct}% Match
+    </span>
+  );
+};
 
 const NearMatches = ({ items, role }) => {
   if (!items?.length) return null;
@@ -222,17 +237,18 @@ const CompanyAlerts = () => {
   );
 };
 
-export const Matches = ({ browse = false, onChange }) => {
+export const Matches = ({ browse = false, companyId = null, onChange }) => {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(null);
+  const navigate = useNavigate();
 
   const [status, setStatus] = useState(null);
 
-  const load = () => api.get(browse ? "/browse" : "/matches").then((r) => {
+  const load = () => api.get(browse ? (companyId ? `/browse?company=${companyId}` : "/browse") : "/matches").then((r) => {
     setRes(r.data);
     if (r.data.role === "provider") api.get("/company/status").then((s) => setStatus(s.data)).catch(() => {});
   }).catch(() => setRes({ role: null, matches: [] }));
-  useEffect(() => { load(); }, [browse]);
+  useEffect(() => { load(); }, [browse, companyId]);
 
   useEffect(() => {
     const refresh = () => api.get("/company/status").then((s) => setStatus(s.data)).catch(() => {});
@@ -305,7 +321,10 @@ export const Matches = ({ browse = false, onChange }) => {
                 </div>
                 <div className="font-heading font-bold">{c.rank}</div>
               </div>
-              {c.boosted && <Badge className="bg-[#DFFF00] text-black text-[10px]">BOOSTED</Badge>}
+              <div className="flex items-center gap-2">
+                {c.boosted && <Badge className="bg-[#DFFF00] text-black text-[10px]">BOOSTED</Badge>}
+                <MatchBadge pct={c.match_pct} />
+              </div>
             </div>
 
             {c.summary && <p className="text-xs text-[#8A8F9E] mb-4">{c.summary}</p>}
@@ -384,7 +403,17 @@ export const Matches = ({ browse = false, onChange }) => {
   return (
     <div data-testid="matches-seeker">
       {alerts}
-      {<GetNoticedFaster referralCode={res.profile?.referral_code} onUnlocked={load} />}
+      {res.company_filter && (
+        <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-[#FF5A00]/40 bg-[#FF5A00]/10 px-4 py-3" data-testid="company-filter-banner">
+          <div className="text-sm text-[#E7EAF0]">
+            Showing postings by <b className="text-[#FF7A2E]">{res.company_name || "this company"}</b>
+          </div>
+          <Button size="sm" variant="outline" className="rounded-full border-white/15 bg-transparent gap-1.5 h-8 px-3 text-xs" onClick={() => navigate("/dashboard")} data-testid="clear-company-filter">
+            <X className="w-3.5 h-3.5" /> Show all
+          </Button>
+        </div>
+      )}
+      {!res.company_filter && <GetNoticedFaster referralCode={res.profile?.referral_code} onUnlocked={load} />}
       {eligible && (
         <div className="mb-6 flex items-center gap-2 text-sm text-[#25D366] rounded-xl border border-[#25D366]/30 bg-[#25D366]/5 px-4 py-3" data-testid="eligible-banner">
           <CheckCircle2 className="w-4 h-4" /> Company names &amp; contacts are unlocked. Tap WhatsApp to reach out directly.
@@ -398,17 +427,20 @@ export const Matches = ({ browse = false, onChange }) => {
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {res.matches.map((p) => (
             <div key={p.id} className="rounded-xl border border-white/10 bg-[#0A0B12] p-5" data-testid={`match-card-${p.id}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-9 h-9 rounded-lg bg-[#12131A] border border-white/10 flex items-center justify-center">
-                  <Building2 className="w-4 h-4 text-[#0066FF]" />
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-lg bg-[#12131A] border border-white/10 flex items-center justify-center">
+                    <Building2 className="w-4 h-4 text-[#0066FF]" />
+                  </div>
+                  <div>
+                    <div className={`font-heading font-bold leading-tight ${!eligible ? "text-[#8A8F9E]" : ""}`}>{p.company_name}</div>
+                    <div className="text-xs text-[#8A8F9E]">{p.rank}</div>
+                    {p.is_rpsl === false && (
+                      <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/40 font-semibold" data-testid={`non-rpsl-badge-${p.id}`}>Non-RPSL Company</span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <div className={`font-heading font-bold leading-tight ${!eligible ? "text-[#8A8F9E]" : ""}`}>{p.company_name}</div>
-                  <div className="text-xs text-[#8A8F9E]">{p.rank}</div>
-                  {p.is_rpsl === false && (
-                    <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-[#f59e0b]/15 text-[#f59e0b] border border-[#f59e0b]/40 font-semibold" data-testid={`non-rpsl-badge-${p.id}`}>Non-RPSL Company</span>
-                  )}
-                </div>
+                <MatchBadge pct={p.match_pct} />
               </div>
               {p.summary && <p className="text-xs text-[#8A8F9E] mb-4">{p.summary}</p>}
               <ReasonTags reasons={p.match_reasons} />

@@ -523,6 +523,52 @@ def criteria_status(seeker: dict, req: dict) -> dict:
     }
 
 
+def _parse_dmy(s: str):
+    m = re.match(r"^\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})", s or "")
+    if not m:
+        return None
+    try:
+        return datetime(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    except ValueError:
+        return None
+
+
+def _availability_ok(seeker_av: str, req_av: str) -> bool:
+    s_imm = (seeker_av or "").strip().lower() in ("immediate", "immediately", "now", "")
+    r_imm = (req_av or "").strip().lower() in ("immediate", "immediately", "now", "")
+    rd, sd = _parse_dmy(req_av), _parse_dmy(seeker_av)
+    if r_imm:
+        return s_imm
+    if rd is None or sd is None or s_imm:
+        return True
+    return sd <= rd
+
+
+# All matching criteria carry EQUAL weight when computing the match %.
+SCORE_KEYS = ["Rank", "Vessel", "Sea time", "COC", "US visa", "Availability"]
+
+
+def score_bools(seeker: dict, req: dict) -> dict:
+    coc_list = req.get("coc", [])
+    visa_ok = req.get("us_visa") in ("Preferred", "Not Required", "", None) or seeker.get("us_visa") == "Valid"
+    return {
+        "Rank": seeker.get("rank") == req.get("rank"),
+        "Vessel": (seeker.get("vessel_type") == req.get("vessel_type")) or (req.get("vessel_type") == "Any"),
+        "Sea time": sea_time_rank(seeker.get("sea_time")) >= sea_time_rank(req.get("sea_time")),
+        "COC": ("Any" in coc_list) or (seeker.get("coc") in coc_list),
+        "US visa": visa_ok,
+        "Availability": _availability_ok(seeker.get("availability"), req.get("availability")),
+    }
+
+
+def match_score(seeker: dict, req: dict):
+    b = score_bools(seeker, req)
+    matched = [k for k, v in b.items() if v]
+    gaps = [k for k, v in b.items() if not v]
+    pct = round(100 * len(matched) / len(b))
+    return pct, matched, gaps
+
+
 def matched_labels(seeker: dict, req: dict) -> list:
     return [k for k, v in criteria_status(seeker, req).items() if v]
 
@@ -741,41 +787,34 @@ async def get_matches(user=Depends(get_current_user)):
         result["role"] = "provider"
         unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(1000)
         unlocked_ids = {u["seeker_id"] for u in unlocks}
-        seekers = await db.seekers.find(ACTIVE_FILTER, {"_id": 0}).to_list(1000)
-        matched, near = [], []
+        seekers = await db.seekers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
+        scored = []
         for s in seekers:
-            if matches_requirement(s, provider):
-                matched.append(s)
-            elif s["rank"] == provider["rank"]:
-                near.append(s)
-        matched.sort(key=lambda s: (not s.get("boosted", False), s.get("created_at", "")), reverse=False)
-        near = dedup_by(near, ["rank", "vessel_type", "sea_time", "coc", "us_visa"])
+            pct, matched, gaps = match_score(s, provider)
+            scored.append((pct, s, matched, gaps))
+        scored.sort(key=lambda t: (t[0], t[1].get("boosted", False), t[1].get("created_at", "")), reverse=True)
         seen_at = user.get("matches_seen_at") or user.get("created_at") or ""
-        result["new_matches"] = sum(1 for s in matched if (s.get("created_at") or "") > seen_at)
+        result["new_matches"] = sum(1 for pct, s, m, g in scored if pct == 100 and (s.get("created_at") or "") > seen_at)
         result["matches"] = [{**redact_seeker(s, s["id"] in unlocked_ids),
-                              "match_reasons": matched_labels(s, provider)} for s in matched]
-        result["near_matches"] = [{**redact_seeker(s, False),
-                                   "gaps": gap_labels(s, provider)} for s in near[:6]]
+                              "match_pct": pct, "match_reasons": m, "gaps": g} for pct, s, m, g in scored]
+        result["near_matches"] = []
         result["free_unlocks_left"] = max(0, FREE_UNLOCKS - len(unlocks))
         result["requirement"] = provider
     elif seeker:
         result["role"] = "seeker"
         elig = is_eligible(user)
         result["eligible"] = elig
-        providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(1000)
-        matched, near = [], []
+        providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
+        scored = []
         for p in providers:
-            if matches_requirement(seeker, p):
-                matched.append(p)
-            elif p["rank"] == seeker["rank"]:
-                near.append(p)
+            pct, matched, gaps = match_score(seeker, p)
+            scored.append((pct, p, matched, gaps))
+        scored.sort(key=lambda t: (t[0], t[1].get("created_at", "")), reverse=True)
         seen_at = user.get("matches_seen_at") or user.get("created_at") or ""
-        result["new_matches"] = sum(1 for p in matched if (p.get("created_at") or "") > seen_at)
+        result["new_matches"] = sum(1 for pct, p, m, g in scored if pct == 100 and (p.get("created_at") or "") > seen_at)
         result["matches"] = [{**provider_card(p, elig),
-                              "match_reasons": matched_labels(seeker, p)} for p in matched]
-        near = dedup_by(near, ["company_name", "rank", "vessel_type", "sea_time"])
-        result["near_matches"] = [{**provider_card(p, elig),
-                                   "gaps": gap_labels(seeker, p)} for p in near[:6]]
+                              "match_pct": pct, "match_reasons": m, "gaps": g} for pct, p, m, g in scored]
+        result["near_matches"] = []
         result["profile"] = seeker
     return result
 
@@ -869,7 +908,7 @@ async def delete_saved_search(sid: str, user=Depends(get_current_user)):
 
 
 @api_router.get("/browse")
-async def browse_all(user=Depends(get_current_user)):
+async def browse_all(company: str = Query(None), user=Depends(get_current_user)):
     provider = await db.providers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
     seeker = await db.seekers.find_one({"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)])
     result = {"role": None, "matches": []}
@@ -880,16 +919,33 @@ async def browse_all(user=Depends(get_current_user)):
         unlocks = await db.unlocks.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
         unlocked_ids = {u["seeker_id"] for u in unlocks}
         seekers = await db.seekers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
-        seekers.sort(key=lambda s: (not s.get("boosted", False), s.get("created_at", "")))
-        result["matches"] = [redact_seeker(s, s["id"] in unlocked_ids) for s in seekers]
+        scored = []
+        for s in seekers:
+            pct, m, g = match_score(s, provider) if provider else (0, [], SCORE_KEYS)
+            scored.append((pct, s, m, g))
+        scored.sort(key=lambda t: (t[0], t[1].get("boosted", False), t[1].get("created_at", "")), reverse=True)
+        result["matches"] = [{**redact_seeker(s, s["id"] in unlocked_ids),
+                              "match_pct": pct, "match_reasons": m, "gaps": g} for pct, s, m, g in scored]
         result["free_unlocks_left"] = max(0, FREE_UNLOCKS - len(unlocks))
         result["requirement"] = provider
     else:
         result["role"] = "seeker"
         elig = is_eligible(user)
         result["eligible"] = elig
-        providers = await db.providers.find(ACTIVE_FILTER, {"_id": 0}).to_list(2000)
-        result["matches"] = [provider_card(p, elig) for p in providers]
+        q = dict(ACTIVE_FILTER)
+        if company:
+            q["user_id"] = company
+        providers = await db.providers.find(q, {"_id": 0}).to_list(2000)
+        scored = []
+        for p in providers:
+            pct, m, g = match_score(seeker, p) if seeker else (0, [], SCORE_KEYS)
+            scored.append((pct, p, m, g))
+        scored.sort(key=lambda t: (t[0], t[1].get("created_at", "")), reverse=True)
+        result["matches"] = [{**provider_card(p, elig),
+                              "match_pct": pct, "match_reasons": m, "gaps": g} for pct, p, m, g in scored]
+        if company:
+            result["company_filter"] = True
+            result["company_name"] = providers[0]["company_name"] if providers else ""
     return result
 
 
@@ -1067,7 +1123,11 @@ async def set_banner(body: BannerIn, user=Depends(get_current_user)):
 @api_router.get("/banners")
 async def get_banners():
     rows = await db.banners.find({}, {"_id": 0}).to_list(50)
-    out = [b for b in rows if await is_subscribed(b["user_id"])]
+    out = []
+    for b in rows:
+        if await is_subscribed(b["user_id"]):
+            b["company_id"] = b["user_id"]
+            out.append(b)
     return {"banners": out}
 
 

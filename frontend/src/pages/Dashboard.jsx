@@ -67,6 +67,7 @@ export default function Dashboard() {
   const seekerProfile = data?.seeker_profiles?.[data.seeker_profiles.length - 1];
   const providerReq = data?.provider_requirements?.[data.provider_requirements.length - 1];
   const isSeeker = !!seekerProfile && !providerReq;
+  const companyParam = new URLSearchParams(window.location.search).get("company");
 
   return (
     <div className="min-h-screen bg-[#05050A]">
@@ -104,7 +105,7 @@ export default function Dashboard() {
 
         {providerReq && <CompanyPlan />}
 
-        <Tabs defaultValue="matches" className="w-full">
+        <Tabs defaultValue={companyParam ? "browse" : "matches"} className="w-full">
           <TabsList className="bg-[#0A0B12] border border-white/10 flex-wrap h-auto p-1">
             <TabTrig value="matches" icon={Users}>Matches</TabTrig>
             <TabTrig value="browse" icon={Globe}>{providerReq ? "All Crew" : "All Vacancies"}</TabTrig>
@@ -122,7 +123,7 @@ export default function Dashboard() {
             <Matches onChange={loadDashboard} />
           </TabsContent>
           <TabsContent value="browse" className="mt-6">
-            <Matches browse onChange={loadDashboard} />
+            <Matches browse companyId={companyParam} onChange={loadDashboard} />
           </TabsContent>
           {providerReq && (
             <TabsContent value="crew-planner" className="mt-6">
