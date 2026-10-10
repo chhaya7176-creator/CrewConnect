@@ -231,6 +231,8 @@ class ProviderRequirement(BaseModel):
 
 class CrewNeedIn(BaseModel):
     vessel_name: str
+    vessel_type: Optional[str] = ""
+    grt: Optional[str] = ""
     ranks: List[str]
     by_date: str
     port: str
@@ -437,6 +439,7 @@ async def create_seeker(profile: SeekerProfile, user=Depends(get_current_user)):
     await db.users.update_one({"id": user["id"]}, {"$set": {
         "consent_given": bool(profile.consent), "consent_at": datetime.now(timezone.utc).isoformat(),
         "consent_version": DPDP_CONSENT_VERSION}})
+    await notify_crew_needs_of_seeker(doc)
     return doc
 
 
@@ -751,6 +754,30 @@ async def notify_company_of_boosted_matches(provider: dict):
             company_user_id=provider["user_id"], to_mobile=provider.get("mobile", ""),
             rank=s["rank"], company_name=provider.get("company_name", "Company"),
             seeker_id=s["id"])
+
+
+async def notify_crew_needs_of_seeker(seeker: dict):
+    """A new seafarer joined -> alert companies whose Crew Planner needs match (rank + vessel type)."""
+    if not seeker:
+        return
+    s_rank = seeker.get("rank")
+    s_vessel = (seeker.get("vessel_type") or "").strip().lower()
+    needs = await db.crew_needs.find({"ranks": s_rank}, {"_id": 0}).to_list(2000)
+    for n in needs:
+        nv = (n.get("vessel_type") or "").strip().lower()
+        if nv and nv != s_vessel:
+            continue
+        key = f"{n['id']}:{seeker['id']}"
+        if await db.crew_need_alerts.find_one({"key": key}):
+            continue
+        msg = (f"New {s_rank} available for {n.get('vessel_name') or 'your vessel'} "
+               f"(joining {n.get('port') or '—'} by {n.get('by_date') or '—'}).")
+        await db.crew_need_alerts.insert_one({
+            "key": key, "company_user_id": n["user_id"], "need_id": n["id"],
+            "seeker_id": seeker["id"], "vessel_name": n.get("vessel_name", ""),
+            "rank": s_rank, "vessel_type": seeker.get("vessel_type", ""),
+            "message": msg, "channel": "whatsapp+email (demo)",
+            "created_at": datetime.now(timezone.utc).isoformat()})
 
 
 def provider_card(p: dict, elig: bool) -> dict:
@@ -1166,6 +1193,12 @@ async def create_crew_need(body: CrewNeedIn, user=Depends(get_current_user)):
 async def list_crew_needs(user=Depends(get_current_user)):
     rows = await db.crew_needs.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return {"crew_needs": rows}
+
+
+@api_router.get("/crew-need-alerts")
+async def list_crew_need_alerts(user=Depends(get_current_user)):
+    rows = await db.crew_need_alerts.find({"company_user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"alerts": rows}
 
 
 @api_router.delete("/crew-needs/{need_id}")

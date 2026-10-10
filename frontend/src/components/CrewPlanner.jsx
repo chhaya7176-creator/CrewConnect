@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { payFor } from "@/lib/pay";
 import { formatDateInput } from "@/lib/formatDate";
-import { Ship, MapPin, CalendarDays, Plus, Trash2, Anchor, BellRing, Gift, Crown } from "lucide-react";
+import { Ship, MapPin, CalendarDays, Plus, Trash2, Anchor, BellRing, Gift, Crown, UserPlus } from "lucide-react";
 
 const parseDMY = (s) => {
   const m = /^\s*(\d{1,2})[/-](\d{1,2})[/-](\d{4})/.exec(s || "");
@@ -54,8 +54,10 @@ const RankMulti = ({ ranks, selected, onToggle }) => (
   </div>
 );
 
-const AddDialog = ({ open, onOpenChange, ranks, onSaved }) => {
+const AddDialog = ({ open, onOpenChange, ranks, vesselTypes, onSaved }) => {
   const [vessel, setVessel] = useState("");
+  const [vType, setVType] = useState("");
+  const [grt, setGrt] = useState("");
   const [selRanks, setSelRanks] = useState([]);
   const [byDate, setByDate] = useState("");
   const [port, setPort] = useState("");
@@ -63,7 +65,7 @@ const AddDialog = ({ open, onOpenChange, ranks, onSaved }) => {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (open) { setVessel(""); setSelRanks([]); setByDate(""); setPort(""); setNote(""); }
+    if (open) { setVessel(""); setVType(""); setGrt(""); setSelRanks([]); setByDate(""); setPort(""); setNote(""); }
   }, [open]);
 
   const toggle = (r) => setSelRanks((c) => (c.includes(r) ? c.filter((x) => x !== r) : [...c, r]));
@@ -75,7 +77,7 @@ const AddDialog = ({ open, onOpenChange, ranks, onSaved }) => {
     if (!port.trim()) return toast.error("Enter the joining port");
     setBusy(true);
     try {
-      await api.post("/crew-needs", { vessel_name: vessel.trim(), ranks: selRanks, by_date: byDate, port: port.trim(), note: note.trim() });
+      await api.post("/crew-needs", { vessel_name: vessel.trim(), vessel_type: vType, grt: String(grt || "").trim(), ranks: selRanks, by_date: byDate, port: port.trim(), note: note.trim() });
       toast.success("Crew requirement added");
       onOpenChange(false);
       onSaved?.();
@@ -102,6 +104,19 @@ const AddDialog = ({ open, onOpenChange, ranks, onSaved }) => {
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wider text-[#8A8F9E]">Vessel name</Label>
             <Input className="bg-black/30 border-white/10" value={vessel} onChange={(e) => setVessel(e.target.value)} placeholder="e.g. MV Ocean Pioneer" data-testid="crew-vessel-input" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-[#8A8F9E]">Vessel type</Label>
+              <select className="w-full h-10 rounded-md bg-black/30 border border-white/10 px-3 text-sm text-[#F3F4F6]" value={vType} onChange={(e) => setVType(e.target.value)} data-testid="crew-vesseltype-input">
+                <option value="">Select type</option>
+                {(vesselTypes || []).map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-[#8A8F9E]">GRT</Label>
+              <Input type="number" className="bg-black/30 border-white/10 font-data" value={grt} onChange={(e) => setGrt(e.target.value)} placeholder="e.g. 25000" data-testid="crew-grt-input" />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs uppercase tracking-wider text-[#8A8F9E]">Ranks needed</Label>
@@ -141,6 +156,8 @@ export const CrewPlanner = () => {
   const [month, setMonth] = useState(new Date());
   const [access, setAccess] = useState(null);
   const [subBusy, setSubBusy] = useState(false);
+  const [vesselTypes, setVesselTypes] = useState([]);
+  const [alerts, setAlerts] = useState([]);
 
   const load = async () => {
     try {
@@ -150,8 +167,9 @@ export const CrewPlanner = () => {
   };
 
   useEffect(() => {
-    api.get("/config").then((r) => setRanks(r.data?.crew_planner_ranks || r.data?.ranks || [])).catch(() => {});
+    api.get("/config").then((r) => { setRanks(r.data?.crew_planner_ranks || r.data?.ranks || []); setVesselTypes(r.data?.vessel_types || []); }).catch(() => {});
     api.get("/company/status").then((r) => setAccess(r.data?.crew_planner || null)).catch(() => {});
+    api.get("/crew-need-alerts").then((r) => setAlerts(r.data?.alerts || [])).catch(() => {});
     load();
   }, []);
 
@@ -248,6 +266,23 @@ export const CrewPlanner = () => {
         </div>
       ) : (
       <>
+      {alerts.length > 0 && (
+        <div className="rounded-xl border border-[#25D366]/40 bg-[#25D366]/5 p-4" data-testid="crew-new-crew-alerts">
+          <div className="flex items-center gap-2 mb-2">
+            <UserPlus className="w-4 h-4 text-[#25D366]" />
+            <span className="font-heading font-bold text-sm text-[#25D366]">New matching crew joined</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#DFFF00] text-black font-bold">DEMO</span>
+          </div>
+          <div className="space-y-1.5">
+            {alerts.slice(0, 8).map((a, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 text-xs" data-testid="crew-alert-row">
+                <span className="text-[#E7EAF0]">{a.message}</span>
+                <span className="text-[10px] text-[#8A8F9E] font-data shrink-0">{String(a.created_at).slice(0, 10)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Reminder log legend */}
       <div className="flex flex-wrap items-center gap-4 text-xs text-[#8A8F9E]">
         <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" /> Over 30 days</span>
@@ -288,6 +323,9 @@ export const CrewPlanner = () => {
               <div className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border-b border-white/10">
                 <Ship className="w-4 h-4 text-[#0066FF]" />
                 <span className="font-heading font-bold text-sm">{vessel}</span>
+                {(items[0]?.vessel_type || items[0]?.grt) && (
+                  <span className="text-[10px] text-[#8A8F9E]">· {[items[0]?.vessel_type, items[0]?.grt ? `${items[0].grt} GRT` : ""].filter(Boolean).join(" · ")}</span>
+                )}
                 <span className="text-[10px] text-[#8A8F9E]">· {items.length} requirement{items.length > 1 ? "s" : ""}</span>
               </div>
               <div className="divide-y divide-white/5">
@@ -343,7 +381,7 @@ export const CrewPlanner = () => {
       </>
       )}
 
-      <AddDialog open={open} onOpenChange={setOpen} ranks={ranks} onSaved={load} />
+      <AddDialog open={open} onOpenChange={setOpen} ranks={ranks} vesselTypes={vesselTypes} onSaved={load} />
     </div>
   );
 };
